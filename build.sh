@@ -18,17 +18,17 @@ format() {
 }
 
 compile() {
-  cargo build
+  cargo build --all-features 
   errcheck $?
 }
 
 test() {
-  cargo test -- --show-output
+  cargo test --all-features -- --show-output
   errcheck $?
 }
 
 unit() {
-  cargo test -- --show-output $1
+  cargo test --all-features -- --show-output $1
   errcheck $?
 }
 
@@ -47,7 +47,7 @@ bench() {
 }
 
 doc() {
-  cargo doc
+  cargo +nightly rustdoc --all-features -- --cfg docsrs
   errcheck $?
 }
 
