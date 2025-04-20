@@ -112,7 +112,7 @@ use std::ptr;
 /// This struct encapsulates the reason for the error, which can be any data type.
 /// Typically, the reason is an enum variant, which makes it easy to uniquely identify
 /// the error kind and location in the source code.
-/// In addition, since an enum variant can store additional informations as their fields,
+/// In addition, since an enum variant can store additional information as their fields,
 /// it is possible to provide more detailed information about the error.
 ///
 /// The reason for the error can be distinguished with match statements, and type
