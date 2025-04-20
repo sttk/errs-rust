@@ -7,7 +7,7 @@ use crate::{Err, ReasonContainer};
 #[cfg(feature = "notify")]
 mod notify;
 #[cfg(feature = "notify")]
-pub use notify::{ErrInfo, add_async_err_handler, add_sync_err_handler, fix_err_handlers};
+pub use notify::{add_async_err_handler, add_sync_err_handler, fix_err_handlers, ErrInfo};
 #[cfg(feature = "notify")]
 use notify::{can_notify, notify_err};
 
