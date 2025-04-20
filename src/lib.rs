@@ -100,7 +100,7 @@ mod err;
 
 #[cfg(feature = "notify")]
 #[cfg_attr(docsrs, doc(cfg(feature = "notify")))]
-pub use err::{ErrInfo, add_async_err_handler, add_sync_err_handler, fix_err_handlers};
+pub use err::{add_async_err_handler, add_sync_err_handler, fix_err_handlers, ErrInfo};
 
 use std::any;
 use std::error;
