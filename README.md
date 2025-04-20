@@ -109,9 +109,9 @@ See the file LICENSE in this distribution for more details.
 
 [repo-url]: https://github.com/sttk/errs-rust
 [crateio-img]: https://img.shields.io/badge/crate.io-ver.0.1.0-fc8d62?logo=rust
-[crateio-url]: https://crates.io/crates/errs-rust
-[docrs-img]: https://img.shields.io/badge/doc.rs-errs_rust-66c2a5?logo=docs.rs
-[docrs-url]: https://docs.rs/errs-rust
+[crateio-url]: https://crates.io/crates/errs
+[docrs-img]: https://img.shields.io/badge/doc.rs-errs-66c2a5?logo=docs.rs
+[docrs-url]: https://docs.rs/errs
 [ci-img]: https://github.com/sttk/errs-rust/actions/workflows/rust.yml/badge.svg?branch=main
 [ci-url]: https://github.com/sttk/errs-rust/actions?query=branch%3Amain
 [mit-img]: https://img.shields.io/badge/license-MIT-green.svg
