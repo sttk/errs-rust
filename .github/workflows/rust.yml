@@ -18,7 +18,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rustver }}
-      - run: cargo test -- --show-output
+      - run: cargo test --all-features -- --show-output
 
   cover:
     name: Coverage for Rust ${{ matrix.rustver }} on ${{ matrix.os }}
