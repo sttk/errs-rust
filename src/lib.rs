@@ -83,8 +83,8 @@
 //! enabling notification processing.
 //!
 //! ```
-//! errs::add_async_err_handler(|info, tm| {
-//!     println!("{}:{}:{} - {}", tm, info.file, info.line, info.reason_type);
+//! errs::add_async_err_handler(|err, tm| {
+//!     println!("{}:{}:{} - {}", tm, err.file, err.line, err);
 //! });
 //!
 //! errs::add_sync_err_handler(|info, tm| {
@@ -100,12 +100,13 @@ mod err;
 
 #[cfg(feature = "notify")]
 #[cfg_attr(docsrs, doc(cfg(feature = "notify")))]
-pub use err::{add_async_err_handler, add_sync_err_handler, fix_err_handlers, ErrInfo};
+pub use err::{add_async_err_handler, add_sync_err_handler, fix_err_handlers};
 
 use std::any;
 use std::error;
 use std::fmt;
 use std::ptr;
+use std::sync::atomic;
 
 /// Is the struct that represents an error with a reason.
 ///
@@ -147,4 +148,5 @@ where
     debug_fn: fn(*const ReasonContainer, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     display_fn: fn(*const ReasonContainer, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     reason: R,
+    is_referenced_by_another: Option<atomic::AtomicBool>,
 }

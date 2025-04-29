@@ -2,6 +2,8 @@
 // This program is free software under MIT License.
 // See the file LICENSE in this distribution for more details.
 
+use crate::Err;
+
 use chrono;
 use futures::future;
 use std::future::Future;
@@ -11,35 +13,13 @@ use std::sync;
 use std::thread;
 use tokio::runtime;
 
-/// Represents the error information.
-///
-/// It contains the type string of the reason, the content string of the reason, the name of the
-/// source file where the error occurred, the line number in the source file where the error
-/// occrred, and the optional content string of the source error.
-pub struct ErrInfo {
-    /// Type of the reason.
-    pub reason_type: &'static str,
-
-    /// String that describes the reason for the error.
-    pub reason_string: String,
-
-    /// The name of source file where the error occurred.
-    pub file: &'static str,
-
-    /// The line number in the source file where the error occurred.
-    pub line: u32,
-
-    /// Optional string containing the source of the error.
-    pub source_string: Option<String>,
-}
-
 struct ErrHandler {
-    handle: fn(info: &ErrInfo, tm: &chrono::DateTime<chrono::Utc>),
+    handle: fn(err: &Err, tm: &chrono::DateTime<chrono::Utc>),
     next: *mut ErrHandler,
 }
 
 impl ErrHandler {
-    fn new(handle: fn(info: &ErrInfo, tm: &chrono::DateTime<chrono::Utc>)) -> Self {
+    fn new(handle: fn(err: &Err, tm: &chrono::DateTime<chrono::Utc>)) -> Self {
         Self {
             handle,
             next: ptr::null_mut(),
@@ -59,13 +39,13 @@ static mut ASYNC_LIST_LAST: *mut ErrHandler = ptr::null_mut();
 /// It will not add the handler if the handlers have been fixed using `fix_err_handlers`.
 ///
 /// ```rust
-/// errs::add_sync_err_handler(|info, tm| {
-///      println!("{}:{}:{} - {}", tm, info.file, info.line, info.reason_type);
+/// errs::add_sync_err_handler(|err, tm| {
+///      println!("{}:{}:{} - {}", tm, err.file, err.line, err);
 /// });
 ///
 /// errs::fix_err_handlers();
 /// ```
-pub fn add_sync_err_handler(handle: fn(info: &ErrInfo, tm: &chrono::DateTime<chrono::Utc>)) {
+pub fn add_sync_err_handler(handle: fn(err: &Err, tm: &chrono::DateTime<chrono::Utc>)) {
     if !FIXED.get().is_none() {
         return;
     }
@@ -89,13 +69,13 @@ pub fn add_sync_err_handler(handle: fn(info: &ErrInfo, tm: &chrono::DateTime<chr
 /// It will not add the handler if the handlers have been fixed using `fix_err_handlers`.
 ///
 /// ```rust
-/// errs::add_async_err_handler(|info, tm| {
-///      println!("{}:{}:{} - {}", tm, info.file, info.line, info.reason_type);
+/// errs::add_async_err_handler(|err, tm| {
+///      println!("{}:{}:{} - {}", tm, err.file, err.line, err);
 /// });
 ///
 /// errs::fix_err_handlers();
 /// ```
-pub fn add_async_err_handler(handle: fn(info: &ErrInfo, tm: &chrono::DateTime<chrono::Utc>)) {
+pub fn add_async_err_handler(handle: fn(err: &Err, tm: &chrono::DateTime<chrono::Utc>)) {
     if !FIXED.get().is_none() {
         return;
     }
@@ -120,10 +100,10 @@ pub fn add_async_err_handler(handle: fn(info: &ErrInfo, tm: &chrono::DateTime<ch
 /// After this is caled, no new handlers can be added, and `Err`(s) is notified to the handlers.
 ///
 /// ```rust
-/// errs::add_sync_err_handler(|info, tm| {
+/// errs::add_sync_err_handler(|err, tm| {
 ///     // ...
 /// });
-/// errs::add_async_err_handler(|info, tm| {
+/// errs::add_async_err_handler(|err, tm| {
 ///     // ...
 /// });
 ///
@@ -134,57 +114,50 @@ pub fn fix_err_handlers() {
 }
 
 pub(crate) fn can_notify() -> bool {
-    if FIXED.get().is_none() {
-        return false;
-    }
-
-    unsafe {
-        if SYNC_LIST_HEAD.is_null() && ASYNC_LIST_HEAD.is_null() {
-            return false;
-        }
-    }
-
-    return true;
+    !FIXED.get().is_none()
 }
 
-pub(crate) fn notify_err(info: ErrInfo, tm: chrono::DateTime<chrono::Utc>) {
-    if FIXED.get().is_none() {
-        return;
-    }
+pub(crate) fn will_notify_async() -> bool {
+    unsafe { !ASYNC_LIST_HEAD.is_null() }
+}
 
+pub(crate) fn notify_err_sync(err: &Err, tm: &chrono::DateTime<chrono::Utc>) {
     unsafe {
         let mut ptr = SYNC_LIST_HEAD;
         while !ptr.is_null() {
             let next = (*ptr).next;
-            ((*ptr).handle)(&info, &tm);
+            ((*ptr).handle)(err, tm);
             ptr = next;
         }
+    }
+}
 
-        if !ASYNC_LIST_HEAD.is_null() {
-            // because there is no need to wait for finishing
-            let _ = thread::spawn(move || {
-                if let Ok(rt) = runtime::Runtime::new() {
-                    let info0 = sync::Arc::new(info);
-                    let tm0 = sync::Arc::new(tm);
-                    rt.block_on(async {
-                        let mut ptr = ASYNC_LIST_HEAD;
-                        let mut fut_vec: Vec<Pin<Box<dyn Future<Output = ()>>>> = Vec::new();
-                        while !ptr.is_null() {
-                            let next = (*ptr).next;
-                            let handle = (*ptr).handle;
-                            let info = sync::Arc::clone(&info0);
-                            let tm = sync::Arc::clone(&tm0);
-                            let fut = Box::pin(async move {
-                                handle(&info, &tm);
-                            });
-                            fut_vec.push(fut);
-                            ptr = next;
-                        }
-                        future::join_all(fut_vec).await;
-                    });
-                }
-            });
-        }
+pub(crate) fn notify_err_async(err: Err, tm: chrono::DateTime<chrono::Utc>) {
+    unsafe {
+        // because there is no need to wait for finishing
+        let _ = thread::spawn(move || {
+            if let Ok(rt) = runtime::Runtime::new() {
+                let err_arc = sync::Arc::<Err>::new(err);
+                let tm_arc = sync::Arc::new(tm);
+
+                rt.block_on(async {
+                    let mut ptr = ASYNC_LIST_HEAD;
+                    let mut fut_vec: Vec<Pin<Box<dyn Future<Output = ()>>>> = Vec::new();
+                    while !ptr.is_null() {
+                        let next = (*ptr).next;
+                        let handle = (*ptr).handle;
+                        let e = sync::Arc::clone(&err_arc);
+                        let t = sync::Arc::clone(&tm_arc);
+                        let fut = Box::pin(async move {
+                            handle(&e, &t);
+                        });
+                        fut_vec.push(fut);
+                        ptr = next;
+                    }
+                    future::join_all(fut_vec).await;
+                });
+            }
+        });
     }
 }
 
@@ -196,29 +169,17 @@ mod tests_of_notify {
 
     static LOGGER: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
-    fn handle1(info: &ErrInfo, _tm: &chrono::DateTime<chrono::Utc>) {
-        LOGGER.lock().unwrap().push(format!(
-            "1: {{ {}, {}, {}, {} }}",
-            info.reason_type, info.reason_string, info.file, info.line,
-        ));
+    fn handle1(err: &Err, _tm: &chrono::DateTime<chrono::Utc>) {
+        LOGGER.lock().unwrap().push(format!("1: {err:?}"));
     }
-    fn handle2(info: &ErrInfo, _tm: &chrono::DateTime<chrono::Utc>) {
-        LOGGER.lock().unwrap().push(format!(
-            "2: {{ {}, {}, {}, {} }}",
-            info.reason_type, info.reason_string, info.file, info.line,
-        ));
+    fn handle2(err: &Err, _tm: &chrono::DateTime<chrono::Utc>) {
+        LOGGER.lock().unwrap().push(format!("2: {err:?}"));
     }
-    fn handle3(info: &ErrInfo, _tm: &chrono::DateTime<chrono::Utc>) {
-        LOGGER.lock().unwrap().push(format!(
-            "3: {{ {}, {}, {}, {} }}",
-            info.reason_type, info.reason_string, info.file, info.line,
-        ));
+    fn handle3(err: &Err, _tm: &chrono::DateTime<chrono::Utc>) {
+        LOGGER.lock().unwrap().push(format!("3: {err:?}"));
     }
-    fn handle4(info: &ErrInfo, _tm: &chrono::DateTime<chrono::Utc>) {
-        LOGGER.lock().unwrap().push(format!(
-            "4: {{ {}, {}, {}, {} }}",
-            info.reason_type, info.reason_string, info.file, info.line,
-        ));
+    fn handle4(err: &Err, _tm: &chrono::DateTime<chrono::Utc>) {
+        LOGGER.lock().unwrap().push(format!("4: {err:?}"));
     }
 
     #[derive(Debug)]
@@ -374,13 +335,13 @@ mod tests_of_notify {
 
         #[cfg(unix)]
         {
-            assert!(LOGGER.lock().unwrap().contains(&String::from("1: { errs::err::notify::tests_of_notify::Errors, FailToDoSomething, src/err/notify.rs, 365 }")));
-            assert!(LOGGER.lock().unwrap().contains(&String::from("2: { errs::err::notify::tests_of_notify::Errors, FailToDoSomething, src/err/notify.rs, 365 }")));
+            assert!(LOGGER.lock().unwrap().contains(&String::from("1: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 326 }")));
+            assert!(LOGGER.lock().unwrap().contains(&String::from("2: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 326 }")));
         }
         #[cfg(windows)]
         {
-            assert!(LOGGER.lock().unwrap().contains(&String::from("1: { errs::err::notify::tests_of_notify::Errors, FailToDoSomething, src\\err\\notify.rs, 365 }")));
-            assert!(LOGGER.lock().unwrap().contains(&String::from("2: { errs::err::notify::tests_of_notify::Errors, FailToDoSomething, src\\err\\notify.rs, 365 }")));
+            assert!(LOGGER.lock().unwrap().contains(&String::from("1: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 326 }")));
+            assert!(LOGGER.lock().unwrap().contains(&String::from("2: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 326 }")));
         }
 
         thread::sleep(std::time::Duration::from_millis(200));
@@ -391,13 +352,13 @@ mod tests_of_notify {
 
         #[cfg(unix)]
         {
-            assert!(LOGGER.lock().unwrap().contains(&String::from("3: { errs::err::notify::tests_of_notify::Errors, FailToDoSomething, src/err/notify.rs, 365 }")));
-            assert!(LOGGER.lock().unwrap().contains(&String::from("4: { errs::err::notify::tests_of_notify::Errors, FailToDoSomething, src/err/notify.rs, 365 }")));
+            assert!(LOGGER.lock().unwrap().contains(&String::from("3: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 326 }")));
+            assert!(LOGGER.lock().unwrap().contains(&String::from("4: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 326 }")));
         }
         #[cfg(windows)]
         {
-            assert!(LOGGER.lock().unwrap().contains(&String::from("3: { errs::err::notify::tests_of_notify::Errors, FailToDoSomething, src\\err\\notify.rs, 365 }")));
-            assert!(LOGGER.lock().unwrap().contains(&String::from("4: { errs::err::notify::tests_of_notify::Errors, FailToDoSomething, src\\err\\notify.rs, 365 }")));
+            assert!(LOGGER.lock().unwrap().contains(&String::from("3: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 326 }")));
+            assert!(LOGGER.lock().unwrap().contains(&String::from("4: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 326 }")));
         }
 
         ////
