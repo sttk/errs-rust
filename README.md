@@ -73,11 +73,11 @@ This function locks the current set of error handlers, preventing further additi
 enabling notification processing.
 
 ```
-errs::add_async_err_handler(|info, tm| {
-    println!("{}:{}:{} - {}", tm, info.file, info.line, info.reason_type);
+errs::add_async_err_handler(|err, tm| {
+    println!("{}:{}:{} - {}", tm, err.file, err.line, err);
 });
 
-errs::add_sync_err_handler(|info, tm| {
+errs::add_sync_err_handler(|err, tm| {
     // ...
 });
 
