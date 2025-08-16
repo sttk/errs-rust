@@ -1,4 +1,4 @@
-# [errs-rust][repo-url] [![crate.io][crateio-img]][crateio-url] [![doc.rs][docrs-img]][docrs-url] [![CI Status][ci-img]][ci-url] [![MIT License][mit-img]][mit-url]
+# [errs][repo-url] [![crates.io][cratesio-img]][cratesio-url] [![doc.rs][docrs-img]][docrs-url] [![CI Status][ci-img]][ci-url] [![MIT License][mit-img]][mit-url]
 
 This crate is for error handling in Rust programs, providing an Err struct which represents an error with a reason.
 
@@ -88,12 +88,12 @@ errs::fix_err_handlers();
 
 This crate supports Rust 1.80.1 or later.
 
-```
+```sh
 % cargo msrv find
   [Meta]   cargo-msrv 0.18.4
         ~~~~~~(omission)~~~~~
 Result:
-   Considered (min … max):   Rust 1.56.1 … Rust 1.86.0
+   Considered (min … max):   Rust 1.56.1 … Rust 1.89.0
    Search method:            bisect
    MSRV:                     1.80.1
    Target:                   x86_64-apple-darwin
@@ -108,8 +108,8 @@ See the file LICENSE in this distribution for more details.
 
 
 [repo-url]: https://github.com/sttk/errs-rust
-[crateio-img]: https://img.shields.io/badge/crate.io-ver.0.2.0-fc8d62?logo=rust
-[crateio-url]: https://crates.io/crates/errs
+[cratesio-img]: https://img.shields.io/badge/crates.io-ver.0.2.0-fc8d62?logo=rust
+[cratesio-url]: https://crates.io/crates/errs
 [docrs-img]: https://img.shields.io/badge/doc.rs-errs-66c2a5?logo=docs.rs
 [docrs-url]: https://docs.rs/errs
 [ci-img]: https://github.com/sttk/errs-rust/actions/workflows/rust.yml/badge.svg?branch=main
