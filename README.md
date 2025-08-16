@@ -1,4 +1,4 @@
-# [errs][repo-url] [![crates.io][cratesio-img]][cratesio-url] [![doc.rs][docrs-img]][docrs-url] [![CI Status][ci-img]][ci-url] [![MIT License][mit-img]][mit-url]
+# [errs for Rust][repo-url] [![crates.io][cratesio-img]][cratesio-url] [![doc.rs][docrs-img]][docrs-url] [![CI Status][ci-img]][ci-url] [![MIT License][mit-img]][mit-url]
 
 This crate is for error handling in Rust programs, providing an Err struct which represents an error with a reason.
 
@@ -6,7 +6,7 @@ The type of this reason is any, but typically an enum variant is used. The name 
 
 Optionally, by using notify feature and registering error handlers in advance, it is possible to receive notifications either synchronously or asynchronously at the time the error struct is created.
 
-## Install
+## Installation
 
 In `Cargo.toml`, write this crate as a dependency:
 
@@ -89,7 +89,9 @@ errs::fix_err_handlers();
 This crate supports Rust 1.80.1 or later.
 
 ```sh
-% cargo msrv find
+% ./build.sh msrv
+    Updating crates.io index
+     Locking 0 packages to latest compatible versions
   [Meta]   cargo-msrv 0.18.4
         ~~~~~~(omission)~~~~~
 Result:
