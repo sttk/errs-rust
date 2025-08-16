@@ -90,10 +90,23 @@ This crate supports Rust 1.80.1 or later.
 
 ```sh
 % ./build.sh msrv
-    Updating crates.io index
-     Locking 0 packages to latest compatible versions
   [Meta]   cargo-msrv 0.18.4
-        ~~~~~~(omission)~~~~~
+
+Compatibility Check #1: Rust 1.73.0
+  [FAIL]   Is incompatible
+
+Compatibility Check #2: Rust 1.81.0
+  [OK]     Is compatible
+
+Compatibility Check #3: Rust 1.77.2
+  [FAIL]   Is incompatible
+
+Compatibility Check #4: Rust 1.79.0
+  [FAIL]   Is incompatible
+
+Compatibility Check #5: Rust 1.80.1
+  [OK]     Is compatible
+
 Result:
    Considered (min … max):   Rust 1.56.1 … Rust 1.89.0
    Search method:            bisect
