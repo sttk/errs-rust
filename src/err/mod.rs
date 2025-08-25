@@ -2,7 +2,7 @@
 // This program is free software under MIT License.
 // See the file LICENSE in this distribution for more details.
 
-use crate::{Err, ReasonContainer};
+use crate::{Err, ReasonContainer, SendSyncNonNull};
 
 #[cfg(feature = "notify")]
 mod notify;
@@ -17,6 +17,16 @@ use std::fmt;
 use std::panic;
 use std::ptr;
 use std::sync::{self, atomic};
+
+unsafe impl<T: Send + Sync> Send for SendSyncNonNull<T> {}
+
+unsafe impl<T: Send + Sync> Sync for SendSyncNonNull<T> {}
+
+impl<T: Send + Sync> SendSyncNonNull<T> {
+    fn as_ptr(&self) -> *mut T {
+        self.0.as_ptr()
+    }
+}
 
 impl Err {
     /// Creates a new `Err` instance with the given reason.
@@ -58,7 +68,7 @@ impl Err {
                 let err = Self {
                     file: loc.file(),
                     line: loc.line(),
-                    reason_container: ptr,
+                    reason_container: SendSyncNonNull(ptr),
                     source: None,
                 };
                 notify_err_sync(&err, &tm);
@@ -66,7 +76,7 @@ impl Err {
                 let err_notified = Self {
                     file: err.file,
                     line: err.line,
-                    reason_container: ptr,
+                    reason_container: SendSyncNonNull(ptr),
                     source: None,
                 };
                 notify_err_async(err_notified, tm);
@@ -79,7 +89,7 @@ impl Err {
                 let err = Self {
                     file: loc.file(),
                     line: loc.line(),
-                    reason_container: ptr,
+                    reason_container: SendSyncNonNull(ptr),
                     source: None,
                 };
                 notify_err_sync(&err, &tm);
@@ -93,7 +103,7 @@ impl Err {
         Self {
             file: loc.file(),
             line: loc.line(),
-            reason_container: ptr,
+            reason_container: SendSyncNonNull(ptr),
             source: None,
         }
     }
@@ -143,7 +153,7 @@ impl Err {
                 let err = Self {
                     file: loc.file(),
                     line: loc.line(),
-                    reason_container: ptr,
+                    reason_container: SendSyncNonNull(ptr),
                     source: Some(Box::new(src_arc.clone())),
                 };
                 notify_err_sync(&err, &tm);
@@ -151,7 +161,7 @@ impl Err {
                 let err_notified = Self {
                     file: err.file,
                     line: err.line,
-                    reason_container: ptr,
+                    reason_container: SendSyncNonNull(ptr),
                     source: Some(Box::new(src_arc)),
                 };
                 notify_err_async(err_notified, tm);
@@ -164,7 +174,7 @@ impl Err {
                 let err = Self {
                     file: loc.file(),
                     line: loc.line(),
-                    reason_container: ptr,
+                    reason_container: SendSyncNonNull(ptr),
                     source: Some(Box::new(source)),
                 };
                 notify_err_sync(&err, &tm);
@@ -179,7 +189,7 @@ impl Err {
         Self {
             file: loc.file(),
             line: loc.line(),
-            reason_container: ptr,
+            reason_container: SendSyncNonNull(ptr),
             source: Some(Box::new(source)),
         }
     }
@@ -315,13 +325,11 @@ impl fmt::Display for Err {
 
 impl error::Error for Err {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        self.source.as_deref()
+        self.source
+            .as_deref()
+            .map(|e| e as &(dyn error::Error + 'static))
     }
 }
-
-// Because Err struct is immutable and its fields are safe to send and share between threads.
-unsafe impl Send for Err {}
-unsafe impl Sync for Err {}
 
 impl<R> ReasonContainer<R>
 where
@@ -404,6 +412,8 @@ mod tests_of_err {
         log_vec: Vec<String>,
     }
 
+    const BASE_LINE: u32 = line!();
+
     #[allow(dead_code)]
     impl Logger {
         fn new() -> Self {
@@ -464,12 +474,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_drop::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src/err/mod.rs, line = 450 }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_drop::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err/mod.rs, line = {} }}", BASE_LINE + 45),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_drop::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src\\err\\mod.rs, line = 450 }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_drop::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err\\mod.rs, line = {} }}", BASE_LINE + 45),
             );
 
             LOGGER.lock().unwrap().log("consumed Enum0");
@@ -511,7 +521,7 @@ mod tests_of_err {
             assert_eq!(err.file, "src/err/mod.rs");
             #[cfg(windows)]
             assert_eq!(err.file, "src\\err\\mod.rs");
-            assert_eq!(err.line, 505);
+            assert_eq!(err.line, BASE_LINE + 100);
             assert_eq!(
                 format!("{err}"),
                 "InvalidValue { name: \"foo\", value: \"abc\" }",
@@ -519,12 +529,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src/err/mod.rs, line = 505 }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err/mod.rs, line = {} }}", BASE_LINE + 100),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src\\err\\mod.rs, line = 505 }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err\\mod.rs, line = {} }}", BASE_LINE + 100),
             );
             assert!(err.source().is_none());
         }
@@ -545,7 +555,7 @@ mod tests_of_err {
             #[cfg(windows)]
             assert_eq!(err.file, "src\\err\\mod.rs");
 
-            assert_eq!(err.line, 535);
+            assert_eq!(err.line, BASE_LINE + 130);
             assert_eq!(
                 format!("{err}"),
                 "InvalidValue { name: \"foo\", value: \"abc\" }",
@@ -554,12 +564,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src/err/mod.rs, line = 535, source = Custom { kind: NotFound, error: \"oh no!\" } }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err/mod.rs, line = {}, source = Custom {{ kind: NotFound, error: \"oh no!\" }} }}", BASE_LINE + 130),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src\\err\\mod.rs, line = 535, source = Custom { kind: NotFound, error: \"oh no!\" } }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err\\mod.rs, line = {}, source = Custom {{ kind: NotFound, error: \"oh no!\" }} }}", BASE_LINE + 130),
             );
             assert!(err.source().is_some());
         }
@@ -598,7 +608,7 @@ mod tests_of_err {
             assert_eq!(err.file, "src/err/mod.rs");
             #[cfg(windows)]
             assert_eq!(err.file, "src\\err\\mod.rs");
-            assert_eq!(err.line, 589);
+            assert_eq!(err.line, BASE_LINE + 184);
             assert_eq!(
                 format!("{err}"),
                 "InvalidValue { name: \"foo\", value: \"abc\" }",
@@ -606,12 +616,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src/err/mod.rs, line = 589, source = MyError { message: \"hello\" } }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err/mod.rs, line = {}, source = MyError {{ message: \"hello\" }} }}", BASE_LINE + 184),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src\\err\\mod.rs, line = 589, source = MyError { message: \"hello\" } }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err\\mod.rs, line = {}, source = MyError {{ message: \"hello\" }} }}", BASE_LINE + 184),
             );
             assert!(err.source().is_some());
         }
@@ -634,17 +644,17 @@ mod tests_of_err {
             assert_eq!(err.file, "src/err/mod.rs");
             #[cfg(windows)]
             assert_eq!(err.file, "src\\err\\mod.rs");
-            assert_eq!(err.line, 626);
+            assert_eq!(err.line, BASE_LINE + 221);
             assert_eq!(format!("{err}"), "FailToGetValue { name: \"foo\" }",);
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 FailToGetValue { name: \"foo\" }, file = src/err/mod.rs, line = 626, source = errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src/err/mod.rs, line = 621 } }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 FailToGetValue {{ name: \"foo\" }}, file = src/err/mod.rs, line = {}, source = errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err/mod.rs, line = {} }} }}", BASE_LINE + 221, BASE_LINE + 216),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 FailToGetValue { name: \"foo\" }, file = src\\err\\mod.rs, line = 626, source = errs::Err { reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue { name: \"foo\", value: \"abc\" }, file = src\\err\\mod.rs, line = 621 } }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 FailToGetValue {{ name: \"foo\" }}, file = src\\err\\mod.rs, line = {}, source = errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err\\mod.rs, line = {} }} }}", BASE_LINE + 221, BASE_LINE + 216),
             );
             assert!(err.source().is_some());
         }
@@ -656,12 +666,18 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = bool true, file = src/err/mod.rs, line = 654 }"
+                format!(
+                    "errs::Err {{ reason = bool true, file = src/err/mod.rs, line = {} }}",
+                    BASE_LINE + 249,
+                ),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = bool true, file = src\\err\\mod.rs, line = 654 }"
+                format!(
+                    "errs::Err {{ reason = bool true, file = src\\err\\mod.rs, line = {} }}",
+                    BASE_LINE + 249,
+                ),
             );
             assert!(err.source().is_none());
         }
@@ -673,12 +689,18 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = i64 123, file = src/err/mod.rs, line = 671 }"
+                format!(
+                    "errs::Err {{ reason = i64 123, file = src/err/mod.rs, line = {} }}",
+                    BASE_LINE + 272,
+                ),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = i64 123, file = src\\err\\mod.rs, line = 671 }"
+                format!(
+                    "errs::Err {{ reason = i64 123, file = src\\err\\mod.rs, line = {} }}",
+                    BASE_LINE + 272,
+                ),
             );
             assert!(err.source().is_none());
         }
@@ -690,12 +712,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = alloc::string::String \"abc\", file = src/err/mod.rs, line = 688 }"
+                format!("errs::Err {{ reason = alloc::string::String \"abc\", file = src/err/mod.rs, line = {} }}", BASE_LINE + 295),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = alloc::string::String \"abc\", file = src\\err\\mod.rs, line = 688 }"
+                format!("errs::Err {{ reason = alloc::string::String \"abc\", file = src\\err\\mod.rs, line = {} }}", BASE_LINE + 295),
             );
             assert!(err.source().is_none());
         }
@@ -717,12 +739,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::StructA StructA { name: \"abc\", value: 123 }, file = src/err/mod.rs, line = 712 }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::StructA StructA {{ name: \"abc\", value: 123 }}, file = src/err/mod.rs, line = {} }}", BASE_LINE + 319),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = errs::err::tests_of_err::test_of_new::StructA StructA { name: \"abc\", value: 123 }, file = src\\err\\mod.rs, line = 712 }"
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::StructA StructA {{ name: \"abc\", value: 123 }}, file = src\\err\\mod.rs, line = {} }}", BASE_LINE + 319),
             );
             assert!(err.source().is_none());
         }
@@ -734,12 +756,18 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = () (), file = src/err/mod.rs, line = 732 }"
+                format!(
+                    "errs::Err {{ reason = () (), file = src/err/mod.rs, line = {} }}",
+                    BASE_LINE + 339,
+                ),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                "errs::Err { reason = () (), file = src\\err\\mod.rs, line = 732 }"
+                format!(
+                    "errs::Err {{ reason = () (), file = src\\err\\mod.rs, line = {} }}",
+                    BASE_LINE + 339,
+                ),
             );
             assert!(err.source().is_none());
         }

@@ -131,8 +131,8 @@ pub struct Err {
     /// The line number in the source file where the error occurred.
     pub line: u32,
 
-    reason_container: ptr::NonNull<ReasonContainer>,
-    source: Option<Box<dyn error::Error>>,
+    reason_container: SendSyncNonNull<ReasonContainer>,
+    source: Option<Box<dyn error::Error + Send + Sync>>,
 }
 
 #[derive(Debug)]
@@ -150,3 +150,17 @@ where
     reason: R,
     is_referenced_by_another: Option<atomic::AtomicBool>,
 }
+
+// When a struct contains a raw pointer as a field, the compiler cannot guarantee the safety of
+// the data the pointer points to. Therefore, the Send and Sync traits are not implemented
+// automatically, which means the struct cannot be safely moved or shared across threads.
+//
+// However, if it is verified that the data pointed to is Send and Sync, they can use an
+// unsafe block to manually implement these traits.
+//
+// This SendSyncNonNull struct solves this issue by using a generic parameter T with a
+// Send + Sync trait bound. This ensures at compile time that the internal pointer will always
+// point to data that is thread-safe. As a result, it is safe to implement Send and Sync using
+// unsafe on this struct itself. By including SendSyncNonNull as a field in another struct,
+// that outer struct can also be made thread-safe.
+struct SendSyncNonNull<T: Send + Sync>(ptr::NonNull<T>);
