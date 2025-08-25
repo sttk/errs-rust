@@ -23,7 +23,7 @@ unsafe impl<T: Send + Sync> Send for SendSyncNonNull<T> {}
 unsafe impl<T: Send + Sync> Sync for SendSyncNonNull<T> {}
 
 impl<T: Send + Sync> SendSyncNonNull<T> {
-    fn as_ptr(&self) -> *mut T {
+    pub fn as_ptr(&self) -> *mut T {
         self.0.as_ptr()
     }
 }
