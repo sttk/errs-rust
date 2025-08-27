@@ -4,158 +4,174 @@
 
 use crate::Err;
 
-use chrono;
-use futures::future;
+use chrono::{DateTime, Utc};
+use futures::future::join_all;
 use std::future::Future;
 use std::pin::Pin;
-use std::ptr;
-use std::sync;
-use std::thread;
-use tokio::runtime;
+use std::sync::{Arc, Mutex, OnceLock};
 
-struct ErrHandler {
-    handle: fn(err: &Err, tm: &chrono::DateTime<chrono::Utc>),
-    next: *mut ErrHandler,
-}
+type BoxedFn = Box<dyn Fn(&Err, &DateTime<Utc>) + Send + Sync + 'static>;
+type BoxedFut = Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>;
+type BoxedFutFn = Box<dyn Fn(Arc<Err>, DateTime<Utc>) -> BoxedFut + Send + Sync + 'static>;
 
-impl ErrHandler {
-    fn new(handle: fn(err: &Err, tm: &chrono::DateTime<chrono::Utc>)) -> Self {
-        Self {
-            handle,
-            next: ptr::null_mut(),
-        }
-    }
-}
+static SYNC_VEC_MUTEX: Mutex<Vec<BoxedFn>> = Mutex::new(Vec::new());
+static SYNC_VEC_FIXED: OnceLock<Vec<BoxedFn>> = OnceLock::new();
+static ASYNC_VEC_MUTEX: Mutex<Vec<BoxedFutFn>> = Mutex::new(Vec::new());
+static ASYNC_VEC_FIXED: OnceLock<Vec<BoxedFutFn>> = OnceLock::new();
 
-static FIXED: sync::OnceLock<()> = sync::OnceLock::new();
-
-static mut SYNC_LIST_HEAD: *mut ErrHandler = ptr::null_mut();
-static mut SYNC_LIST_LAST: *mut ErrHandler = ptr::null_mut();
-static mut ASYNC_LIST_HEAD: *mut ErrHandler = ptr::null_mut();
-static mut ASYNC_LIST_LAST: *mut ErrHandler = ptr::null_mut();
-
-/// Adds a new synchronous error handler to the global handler list.
+/// Adds a synchronous error handler.
 ///
-/// It will not add the handler if the handlers have been fixed using `fix_err_handlers`.
+/// This function allows you to register a closure that will be executed synchronously
+/// when an error is notified. Handlers can only be added before they are fixed
+/// by calling `fix_err_handlers`.
 ///
-/// ```rust
-/// errs::add_sync_err_handler(|err, tm| {
-///      println!("{}:{}:{} - {}", tm, err.file, err.line, err);
-/// });
+/// # Arguments
 ///
-/// errs::fix_err_handlers();
-/// ```
-pub fn add_sync_err_handler(handle: fn(err: &Err, tm: &chrono::DateTime<chrono::Utc>)) {
-    if !FIXED.get().is_none() {
-        return;
-    }
-
-    let boxed = Box::new(ErrHandler::new(handle));
-    let ptr = Box::into_raw(boxed);
-
-    unsafe {
-        if SYNC_LIST_LAST.is_null() {
-            SYNC_LIST_HEAD = ptr;
-            SYNC_LIST_LAST = ptr;
+/// * `handler` - A closure that takes a reference to `errs::Err` and `DateTime<Utc>`.
+pub fn add_sync_err_handler<F>(handler: F)
+where
+    F: Fn(&Err, &DateTime<Utc>) + Send + Sync + 'static,
+{
+    if SYNC_VEC_FIXED.get().is_none() {
+        if let Ok(mut vec) = SYNC_VEC_MUTEX.lock() {
+            vec.push(Box::new(handler));
         } else {
-            (*SYNC_LIST_LAST).next = ptr;
-            SYNC_LIST_LAST = ptr;
+            eprintln!(
+                "ERROR: Failed to add synchronous errs::Err handler due to a Mutex lock failure."
+            );
         }
+    } else {
+        eprintln!("WARNING: Attempted to add synchronous errs::Err handler after fixed. The operation was ignored.");
     }
 }
 
-/// Adds a new asynchronous error handler to the global handler list.
+/// A helper function for adding asynchronous error handlers.
 ///
-/// It will not add the handler if the handlers have been fixed using `fix_err_handlers`.
+/// This function is typically called by the `add_async_err_handler!` macro
+/// to register a handler that returns a `Future`. Handlers can only be added
+/// before they are finalized by `fix_err_handlers`.
 ///
-/// ```rust
-/// errs::add_async_err_handler(|err, tm| {
-///      println!("{}:{}:{} - {}", tm, err.file, err.line, err);
-/// });
+/// # Arguments
 ///
-/// errs::fix_err_handlers();
-/// ```
-pub fn add_async_err_handler(handle: fn(err: &Err, tm: &chrono::DateTime<chrono::Utc>)) {
-    if !FIXED.get().is_none() {
-        return;
-    }
-
-    let boxed = Box::new(ErrHandler::new(handle));
-    let ptr = Box::into_raw(boxed);
-
-    unsafe {
-        if ASYNC_LIST_LAST.is_null() {
-            ASYNC_LIST_HEAD = ptr;
-            ASYNC_LIST_LAST = ptr;
+/// * `handler` - A closure that takes an `Arc<Err>` and `DateTime<Utc>`, and returns a boxed future.
+pub fn __add_async_err_handler<F>(handler: F)
+where
+    F: Fn(Arc<Err>, DateTime<Utc>) -> BoxedFut + Send + Sync + 'static,
+{
+    if ASYNC_VEC_FIXED.get().is_none() {
+        if let Ok(mut vec) = ASYNC_VEC_MUTEX.lock() {
+            vec.push(Box::new(handler));
         } else {
-            (*ASYNC_LIST_LAST).next = ptr;
-            ASYNC_LIST_LAST = ptr;
+            eprintln!(
+                "ERROR: Failed to add asynchronous errs::Err handler due to a Mutex lock failure."
+            );
         }
+    } else {
+        eprintln!("WARNING: Attempted to add asynchronous errs::Err handler after fixed. The operation was ignored.");
     }
 }
 
-/// Prevents modification of the error handler lists.
+/// A macro for adding asynchronous error handlers.
 ///
-/// Before this is called, no `Err` is nofified to the handlers
-/// After this is caled, no new handlers can be added, and `Err`(s) is notified to the handlers.
+/// This macro provides a simplified syntax for registering an asynchronous error handler.
+/// It wraps a closure, converting it into a `Pin<Box<dyn Future...>>` and
+/// passing it to the internal `__add_async_err_handler` function.
 ///
-/// ```rust
-/// errs::add_sync_err_handler(|err, tm| {
-///     // ...
-/// });
-/// errs::add_async_err_handler(|err, tm| {
-///     // ...
-/// });
+/// **Note**: Handlers can only be added before they are fixed by calling `fix_err_handlers`.
 ///
-/// errs::fix_err_handlers();
-/// ```
+/// # Syntax
+///
+/// `add_async_err_handler!(async |err, tm| { ... })`  // without environment capture
+/// `add_async_err_handler!(move |err, tm| { async move { ... } })`  // with environment capture
+///
+/// # Arguments
+///
+/// * `err` - The captured `Arc<Err>` instance.
+/// * `tm` - The captured `DateTime<Utc>` instance.
+#[cfg(feature = "notify")]
+#[cfg_attr(docsrs, doc(cfg(feature = "notify")))]
+#[macro_export]
+macro_rules! add_async_err_handler {
+    ( async | $err:ident , $tm:ident | $body:block ) => {
+        $crate::__add_async_err_handler(
+            |$err: std::sync::Arc<$crate::Err>, $tm: chrono::DateTime<chrono::Utc>| {
+                Box::pin(async move { $body })
+            },
+        )
+    };
+    ( move | $err:ident , $tm:ident | $body:block) => {
+        $crate::__add_async_err_handler(
+            move |$err: std::sync::Arc<$crate::Err>, $tm: chrono::DateTime<chrono::Utc>| {
+                Box::pin({ $body })
+            },
+        )
+    };
+}
+
 pub fn fix_err_handlers() {
-    let _ = FIXED.set(());
+    if SYNC_VEC_FIXED.get().is_none() {
+        if let Ok(mut vec) = SYNC_VEC_MUTEX.lock() {
+            let owned_vec = std::mem::take(&mut *vec);
+            let _ = SYNC_VEC_FIXED.set(owned_vec);
+        } else {
+            eprintln!(
+                "ERROR: Failed to fix synchronous errs::Err handler due to a Mutex lock failure."
+            );
+        }
+    }
+
+    if ASYNC_VEC_FIXED.get().is_none() {
+        if let Ok(mut vec) = ASYNC_VEC_MUTEX.lock() {
+            let owned_vec = std::mem::take(&mut *vec);
+            let _ = ASYNC_VEC_FIXED.set(owned_vec);
+        } else {
+            eprintln!(
+                "ERROR: Failed to fix asynchronous errs::Err handler due to a Mutex lock failure."
+            );
+        }
+    }
 }
 
 pub(crate) fn can_notify() -> bool {
-    !FIXED.get().is_none()
+    SYNC_VEC_FIXED.get().is_some()
 }
 
 pub(crate) fn will_notify_async() -> bool {
-    unsafe { !ASYNC_LIST_HEAD.is_null() }
+    if let Some(vec) = ASYNC_VEC_FIXED.get() {
+        return !vec.is_empty();
+    }
+    false
 }
 
 pub(crate) fn notify_err_sync(err: &Err, tm: &chrono::DateTime<chrono::Utc>) {
-    unsafe {
-        let mut ptr = SYNC_LIST_HEAD;
-        while !ptr.is_null() {
-            let next = (*ptr).next;
-            ((*ptr).handle)(err, tm);
-            ptr = next;
+    if let Some(vec) = SYNC_VEC_FIXED.get() {
+        for handle in vec.iter() {
+            handle(err, tm)
         }
     }
 }
 
 pub(crate) fn notify_err_async(err: Err, tm: chrono::DateTime<chrono::Utc>) {
-    unsafe {
-        // because there is no need to wait for finishing
-        let _ = thread::spawn(move || {
-            if let Ok(rt) = runtime::Runtime::new() {
-                let err_arc = sync::Arc::<Err>::new(err);
-                let tm_arc = sync::Arc::new(tm);
+    let task = move || async move {
+        if let Some(vec) = ASYNC_VEC_FIXED.get() {
+            let err_arc = Arc::<Err>::new(err);
+            let futures: Vec<BoxedFut> = vec
+                .iter()
+                .map(|f| f(Arc::clone(&err_arc), tm.clone()))
+                .collect();
+            join_all(futures).await;
+        }
+    };
 
-                rt.block_on(async {
-                    let mut ptr = ASYNC_LIST_HEAD;
-                    let mut fut_vec: Vec<Pin<Box<dyn Future<Output = ()>>>> = Vec::new();
-                    while !ptr.is_null() {
-                        let next = (*ptr).next;
-                        let handle = (*ptr).handle;
-                        let e = sync::Arc::clone(&err_arc);
-                        let t = sync::Arc::clone(&tm_arc);
-                        let fut = Box::pin(async move {
-                            handle(&e, &t);
-                        });
-                        fut_vec.push(fut);
-                        ptr = next;
-                    }
-                    future::join_all(fut_vec).await;
-                });
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(task());
+    } else {
+        std::thread::spawn(move || match tokio::runtime::Runtime::new() {
+            Ok(rt) => {
+                rt.block_on(task());
+            }
+            Err(e) => {
+                eprintln!("Failed to create a tokiio runtime due to: {:?}", e);
             }
         });
     }
@@ -164,210 +180,123 @@ pub(crate) fn notify_err_async(err: Err, tm: chrono::DateTime<chrono::Utc>) {
 #[cfg(test)]
 mod tests_of_notify {
     use super::*;
-    use crate::Err;
     use std::sync::{LazyLock, Mutex};
 
     static LOGGER: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
-
-    fn handle1(err: &Err, _tm: &chrono::DateTime<chrono::Utc>) {
-        LOGGER.lock().unwrap().push(format!("1: {err:?}"));
-    }
-    fn handle2(err: &Err, _tm: &chrono::DateTime<chrono::Utc>) {
-        LOGGER.lock().unwrap().push(format!("2: {err:?}"));
-    }
-    fn handle3(err: &Err, _tm: &chrono::DateTime<chrono::Utc>) {
-        LOGGER.lock().unwrap().push(format!("3: {err:?}"));
-    }
-    fn handle4(err: &Err, _tm: &chrono::DateTime<chrono::Utc>) {
-        LOGGER.lock().unwrap().push(format!("4: {err:?}"));
-    }
 
     #[derive(Debug)]
     enum Errors {
         FailToDoSomething,
     }
 
-    #[allow(static_mut_refs)]
     #[test]
     fn test() {
-        unsafe {
-            assert!(SYNC_LIST_HEAD.is_null());
-            assert!(SYNC_LIST_LAST.is_null());
-            assert!(ASYNC_LIST_HEAD.is_null());
-            assert!(ASYNC_LIST_LAST.is_null());
+        add_sync_err_handler(|err, _tm| {
+            if err.file.ends_with("notify.rs") {
+                LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
+            }
+        });
 
-            assert!(FIXED.get().is_none());
-            assert!(!can_notify());
-        }
+        __add_async_err_handler(|err, _tm| {
+            Box::pin(async move {
+                if err.file.ends_with("notify.rs") {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                    LOGGER.lock().unwrap().push(format!("2: err={err:?}"));
+                }
+            })
+        });
 
-        let _ = Err::new(Errors::FailToDoSomething);
-        let n = LOGGER.lock().unwrap().len();
-        assert_eq!(n, 0);
+        add_async_err_handler!(async |err, _tm| {
+            if err.file.ends_with("notify.rs") {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                LOGGER.lock().unwrap().push(format!("3: err={err:?}"));
+            }
+        });
 
-        ////
+        let n1 = Arc::new(1);
+        let n2 = n1.clone();
 
-        add_sync_err_handler(handle1);
+        __add_async_err_handler(move |err, _tm| {
+            Box::pin({
+                let n_cloned = n1.clone();
+                async move {
+                    if err.file.ends_with("notify.rs") {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                        LOGGER
+                            .lock()
+                            .unwrap()
+                            .push(format!("4: err={err:?}, captured n={n_cloned}"));
+                    }
+                }
+            })
+        });
 
-        unsafe {
-            assert!(!SYNC_LIST_HEAD.is_null());
-            assert!(!SYNC_LIST_LAST.is_null());
-
-            assert_eq!(SYNC_LIST_HEAD, SYNC_LIST_LAST);
-            assert!((*SYNC_LIST_HEAD).next.is_null());
-            assert!((*SYNC_LIST_LAST).next.is_null());
-
-            assert!(ASYNC_LIST_HEAD.is_null());
-            assert!(ASYNC_LIST_LAST.is_null());
-
-            assert!(FIXED.get().is_none());
-            assert!(!can_notify());
-        }
-
-        let _ = Err::new(Errors::FailToDoSomething);
-        let n = LOGGER.lock().unwrap().len();
-        assert_eq!(n, 0);
-
-        ////
-
-        add_sync_err_handler(handle2);
-
-        unsafe {
-            assert!(!SYNC_LIST_HEAD.is_null());
-            assert!(!SYNC_LIST_LAST.is_null());
-
-            assert_eq!((*SYNC_LIST_HEAD).next, SYNC_LIST_LAST);
-            assert!((*SYNC_LIST_LAST).next.is_null());
-
-            assert!(ASYNC_LIST_HEAD.is_null());
-            assert!(ASYNC_LIST_LAST.is_null());
-
-            assert!(FIXED.get().is_none());
-            assert!(!can_notify());
-        }
-
-        let _ = Err::new(Errors::FailToDoSomething);
-        let n = LOGGER.lock().unwrap().len();
-        assert_eq!(n, 0);
-
-        ////
-
-        add_async_err_handler(handle3);
-
-        unsafe {
-            assert!(!SYNC_LIST_HEAD.is_null());
-            assert!(!SYNC_LIST_LAST.is_null());
-
-            assert_eq!((*SYNC_LIST_HEAD).next, SYNC_LIST_LAST);
-            assert!((*SYNC_LIST_LAST).next.is_null());
-
-            assert!(!ASYNC_LIST_HEAD.is_null());
-            assert!(!ASYNC_LIST_LAST.is_null());
-
-            assert_eq!(ASYNC_LIST_HEAD, ASYNC_LIST_LAST);
-            assert!((*ASYNC_LIST_HEAD).next.is_null());
-            assert!((*ASYNC_LIST_LAST).next.is_null());
-
-            assert!(FIXED.get().is_none());
-            assert!(!can_notify());
-        }
-
-        let _ = Err::new(Errors::FailToDoSomething);
-        let n = LOGGER.lock().unwrap().len();
-        assert_eq!(n, 0);
-
-        ////
-
-        add_async_err_handler(handle4);
-
-        unsafe {
-            assert!(!SYNC_LIST_HEAD.is_null());
-            assert!(!SYNC_LIST_LAST.is_null());
-
-            let handle = SYNC_LIST_HEAD;
-            assert_eq!((*handle).next, SYNC_LIST_LAST);
-            assert!((*SYNC_LIST_LAST).next.is_null());
-
-            assert!(!ASYNC_LIST_HEAD.is_null());
-            assert!(!ASYNC_LIST_LAST.is_null());
-
-            assert_eq!((*ASYNC_LIST_HEAD).next, ASYNC_LIST_LAST);
-            assert!((*ASYNC_LIST_LAST).next.is_null());
-
-            assert!(FIXED.get().is_none());
-            assert!(!can_notify());
-        }
-
-        let _ = Err::new(Errors::FailToDoSomething);
-        let n = LOGGER.lock().unwrap().len();
-        assert_eq!(n, 0);
-
-        ////
+        add_async_err_handler!(move |err, _tm| {
+            let n_cloned = n2.clone();
+            async move {
+                if err.file.ends_with("notify.rs") {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    LOGGER
+                        .lock()
+                        .unwrap()
+                        .push(format!("5: err={err:?}, captured n={n_cloned}"));
+                }
+            }
+        });
 
         fix_err_handlers();
 
-        unsafe {
-            assert!(!SYNC_LIST_HEAD.is_null());
-            assert!(!SYNC_LIST_LAST.is_null());
+        add_sync_err_handler(move |_err, _tm| {
+            LOGGER
+                .lock()
+                .unwrap()
+                .push(format!("handler isn't added handler after fixed"));
+        });
 
-            let handle = SYNC_LIST_HEAD;
-            assert_eq!((*handle).next, SYNC_LIST_LAST);
-            assert!((*SYNC_LIST_LAST).next.is_null());
+        __add_async_err_handler(|_err, _tm| {
+            Box::pin({
+                async move {
+                    LOGGER
+                        .lock()
+                        .unwrap()
+                        .push(format!("handler isn't added handler after fixed"));
+                }
+            })
+        });
 
-            assert!(!ASYNC_LIST_HEAD.is_null());
-            assert!(!ASYNC_LIST_LAST.is_null());
-
-            assert_eq!((*ASYNC_LIST_HEAD).next, ASYNC_LIST_LAST);
-            assert!((*ASYNC_LIST_LAST).next.is_null());
-
-            assert!(!FIXED.get().is_none());
-            assert!(can_notify());
-        }
+        add_async_err_handler!(async |_err, _tm| {
+            LOGGER
+                .lock()
+                .unwrap()
+                .push(format!("handler isn't added handler after fixed"));
+        });
 
         let _ = Err::new(Errors::FailToDoSomething);
-        let n = LOGGER.lock().unwrap().len();
+        //assert_eq!(LOGGER.lock().unwrap().len(), 1);
 
-        // Since tests are executed in parallel, errors from other tests may write to the logs
-        assert_ne!(n, 0);
+        std::thread::sleep(std::time::Duration::from_secs(6));
 
-        //for log in LOGGER.lock().unwrap().iter() {
-        //    println!("{}", log)
-        //}
+        for log in LOGGER.lock().unwrap().iter() {
+            println!("{}", log);
+        }
+        assert_eq!(LOGGER.lock().unwrap().len(), 5);
 
+        let vec = LOGGER.lock().unwrap();
         #[cfg(unix)]
         {
-            assert!(LOGGER.lock().unwrap().contains(&String::from("1: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 326 }")));
-            assert!(LOGGER.lock().unwrap().contains(&String::from("2: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 326 }")));
+            assert_eq!(vec[0], "1: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }");
+            assert_eq!(vec[1], "3: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }");
+            assert_eq!(vec[2], "5: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }, captured n=1");
+            assert_eq!(vec[3], "4: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }, captured n=1");
+            assert_eq!(vec[4], "2: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }");
         }
         #[cfg(windows)]
         {
-            assert!(LOGGER.lock().unwrap().contains(&String::from("1: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 326 }")));
-            assert!(LOGGER.lock().unwrap().contains(&String::from("2: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 326 }")));
-        }
-
-        thread::sleep(std::time::Duration::from_millis(200));
-
-        //for log in LOGGER.lock().unwrap().iter() {
-        //    println!("{}", log)
-        //}
-
-        #[cfg(unix)]
-        {
-            assert!(LOGGER.lock().unwrap().contains(&String::from("3: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 326 }")));
-            assert!(LOGGER.lock().unwrap().contains(&String::from("4: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 326 }")));
-        }
-        #[cfg(windows)]
-        {
-            assert!(LOGGER.lock().unwrap().contains(&String::from("3: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 326 }")));
-            assert!(LOGGER.lock().unwrap().contains(&String::from("4: errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 326 }")));
-        }
-
-        ////
-
-        unsafe {
-            SYNC_LIST_HEAD = ptr::null_mut();
-            SYNC_LIST_LAST = ptr::null_mut();
-            ASYNC_LIST_HEAD = ptr::null_mut();
-            ASYNC_LIST_LAST = ptr::null_mut();
+            assert_eq!(vec[0], "1: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }");
+            assert_eq!(vec[1], "3: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }");
+            assert_eq!(vec[2], "5: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }, captured n=1");
+            assert_eq!(vec[3], "4: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }, captured n=1");
+            assert_eq!(vec[4], "2: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }");
         }
     }
 }

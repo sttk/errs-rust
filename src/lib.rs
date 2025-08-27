@@ -76,19 +76,19 @@
 //! synchronously or asynchronously.
 //! To register error handlers that receive notifications synchronously, use the
 //! `add_sync_err_handler` function.
-//! For asynchronous notifications, use the `add_async_err_handler` function.
+//! For asynchronous notifications, use the `add_async_err_handler!` macro function.
 //!
 //! Error notifications will not occur until the `fix_err_handlers` function is called.
 //! This function locks the current set of error handlers, preventing further additions and
 //! enabling notification processing.
 //!
-//! ```
-//! errs::add_async_err_handler(|err, tm| {
+//! ```rust
+//! errs::add_async_err_handler!(async |err, tm| {
 //!     println!("{}:{}:{} - {}", tm, err.file, err.line, err);
 //! });
 //!
-//! errs::add_sync_err_handler(|info, tm| {
-//!     // ...
+//! errs::add_sync_err_handler(|err, tm| {
+//!     println!("{}:{}:{} - {}", tm, err.file, err.line, err);
 //! });
 //!
 //! errs::fix_err_handlers();
@@ -100,7 +100,7 @@ mod err;
 
 #[cfg(feature = "notify")]
 #[cfg_attr(docsrs, doc(cfg(feature = "notify")))]
-pub use err::{add_async_err_handler, add_sync_err_handler, fix_err_handlers};
+pub use err::{__add_async_err_handler, add_sync_err_handler, fix_err_handlers};
 
 use std::any;
 use std::error;
