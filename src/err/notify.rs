@@ -45,16 +45,19 @@ where
     }
 }
 
-/// A helper function for adding asynchronous error handlers.
+/// Adds an asynchronous error handler.
 ///
-/// This function is typically called by the `add_async_err_handler!` macro
-/// to register a handler that returns a `Future`. Handlers can only be added
-/// before they are finalized by `fix_err_handlers`.
+/// This is a low-level, public function that directly adds a boxed closure to the
+/// handler list. It is typically not called directly by users but is instead
+/// used internally by the `add_async_err_handler!` macro to provide a
+/// more convenient syntax.
+///
+/// Handlers can only be added before they are finalized by calling `fix_err_handlers`.
 ///
 /// # Arguments
 ///
 /// * `handler` - A closure that takes an `Arc<Err>` and `DateTime<Utc>`, and returns a boxed future.
-pub fn __add_async_err_handler<F>(handler: F)
+pub fn add_raw_async_err_handler<F>(handler: F)
 where
     F: Fn(Arc<Err>, DateTime<Utc>) -> BoxedFut + Send + Sync + 'static,
 {
@@ -75,7 +78,7 @@ where
 ///
 /// This macro provides a simplified syntax for registering an asynchronous error handler.
 /// It wraps a closure, converting it into a `Pin<Box<dyn Future...>>` and
-/// passing it to the internal `__add_async_err_handler` function.
+/// passing it to the internal `add_raw_async_err_handler` function.
 ///
 /// **Note**: Handlers can only be added before they are fixed by calling `fix_err_handlers`.
 ///
@@ -93,14 +96,14 @@ where
 #[macro_export]
 macro_rules! add_async_err_handler {
     ( async | $err:ident , $tm:ident | $body:block ) => {
-        $crate::__add_async_err_handler(
+        $crate::add_raw_async_err_handler(
             |$err: std::sync::Arc<$crate::Err>, $tm: chrono::DateTime<chrono::Utc>| {
                 Box::pin(async move { $body })
             },
         )
     };
     ( move | $err:ident , $tm:ident | $body:block) => {
-        $crate::__add_async_err_handler(
+        $crate::add_raw_async_err_handler(
             move |$err: std::sync::Arc<$crate::Err>, $tm: chrono::DateTime<chrono::Utc>| {
                 Box::pin({ $body })
             },
@@ -197,7 +200,7 @@ mod tests_of_notify {
             }
         });
 
-        __add_async_err_handler(|err, _tm| {
+        add_raw_async_err_handler(|err, _tm| {
             Box::pin(async move {
                 if err.file.ends_with("notify.rs") {
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
@@ -216,7 +219,7 @@ mod tests_of_notify {
         let n1 = Arc::new(1);
         let n2 = n1.clone();
 
-        __add_async_err_handler(move |err, _tm| {
+        add_raw_async_err_handler(move |err, _tm| {
             Box::pin({
                 let n_cloned = n1.clone();
                 async move {
@@ -253,7 +256,7 @@ mod tests_of_notify {
                 .push(format!("handler isn't added handler after fixed"));
         });
 
-        __add_async_err_handler(|_err, _tm| {
+        add_raw_async_err_handler(|_err, _tm| {
             Box::pin({
                 async move {
                     LOGGER
@@ -284,19 +287,19 @@ mod tests_of_notify {
         let vec = LOGGER.lock().unwrap();
         #[cfg(unix)]
         {
-            assert_eq!(vec[0], "1: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }");
-            assert_eq!(vec[1], "3: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }");
-            assert_eq!(vec[2], "5: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }, captured n=1");
-            assert_eq!(vec[3], "4: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }, captured n=1");
-            assert_eq!(vec[4], "2: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 274 }");
+            assert_eq!(vec[0], "1: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 277 }");
+            assert_eq!(vec[1], "3: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 277 }");
+            assert_eq!(vec[2], "5: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 277 }, captured n=1");
+            assert_eq!(vec[3], "4: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 277 }, captured n=1");
+            assert_eq!(vec[4], "2: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src/err/notify.rs, line = 277 }");
         }
         #[cfg(windows)]
         {
-            assert_eq!(vec[0], "1: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }");
-            assert_eq!(vec[1], "3: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }");
-            assert_eq!(vec[2], "5: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }, captured n=1");
-            assert_eq!(vec[3], "4: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }, captured n=1");
-            assert_eq!(vec[4], "2: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 274 }");
+            assert_eq!(vec[0], "1: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 277 }");
+            assert_eq!(vec[1], "3: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 277 }");
+            assert_eq!(vec[2], "5: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 277 }, captured n=1");
+            assert_eq!(vec[3], "4: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 277 }, captured n=1");
+            assert_eq!(vec[4], "2: err=errs::Err { reason = errs::err::notify::tests_of_notify::Errors FailToDoSomething, file = src\\err\\notify.rs, line = 277 }");
         }
     }
 }
