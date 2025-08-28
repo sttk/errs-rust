@@ -4,11 +4,11 @@
 
 use crate::{Err, ReasonContainer, SendSyncNonNull};
 
-#[cfg(feature = "notify")]
+#[cfg(feature = "errs-notify")]
 mod notify;
-#[cfg(feature = "notify")]
+#[cfg(feature = "errs-notify")]
 pub use notify::{add_raw_async_err_handler, add_sync_err_handler, fix_err_handlers};
-#[cfg(feature = "notify")]
+#[cfg(feature = "errs-notify")]
 use notify::{can_notify, notify_err_async, notify_err_sync, will_notify_async};
 
 use std::any;
@@ -57,7 +57,7 @@ impl Err {
     {
         let loc = panic::Location::caller();
 
-        #[cfg(feature = "notify")]
+        #[cfg(feature = "errs-notify")]
         if can_notify() {
             let tm = chrono::Utc::now();
 
@@ -141,7 +141,7 @@ impl Err {
     {
         let loc = panic::Location::caller();
 
-        #[cfg(feature = "notify")]
+        #[cfg(feature = "errs-notify")]
         if can_notify() {
             let tm = chrono::Utc::now();
 

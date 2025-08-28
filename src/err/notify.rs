@@ -91,8 +91,8 @@ where
 ///
 /// * `err` - The captured `Arc<Err>` instance.
 /// * `tm` - The captured `DateTime<Utc>` instance.
-#[cfg(feature = "notify")]
-#[cfg_attr(docsrs, doc(cfg(feature = "notify")))]
+#[cfg(feature = "errs-notify")]
+#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
 #[macro_export]
 macro_rules! add_async_err_handler {
     ( async | $err:ident , $tm:ident | $body:block ) => {
