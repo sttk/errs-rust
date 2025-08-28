@@ -22,7 +22,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! errs = "0.2.0"
+//! errs = "0.3.0"
 //! ```
 //!
 //! If you want to use error notification, specifies `errs-notify` or `full` in the dependency
@@ -30,7 +30,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.2.0", features = ["errs-notify"] }
+//! errs = { version = "0.3.0", features = ["errs-notify"] }
 //! ```
 //!
 //! ## Usage
