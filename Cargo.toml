@@ -24,10 +24,10 @@ trybuild = "1"
 default = []
 
 full = [
-  "notify",
+  "errs-notify",
 ]
 
-notify = []
+errs-notify = []
 
 [package.metadata.docs.rs]
 all-features = true

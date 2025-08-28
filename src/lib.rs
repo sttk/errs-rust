@@ -12,9 +12,9 @@
 //! variant representing the reason is useful for identifying the specific error, locating where it
 //! occurred, or generating appropriate error messages, etc.
 //!
-//! Optionally, by using `notify` feature and registering error handlers in advance, it is possible
-//! to receive notifications either synchronously or asynchronously at the time the error struct is
-//! created.
+//! Optionally, by using `errs-notify` feature and registering error handlers in advance, it is
+//! possible to receive notifications either synchronously or asynchronously at the time the error
+//! struct is created.
 //!
 //! ## Install
 //!
@@ -25,11 +25,12 @@
 //! errs = "0.2.0"
 //! ```
 //!
-//! If you want to use error notification, specifies `notify` or `full` in the dependency features:
+//! If you want to use error notification, specifies `errs-notify` or `full` in the dependency
+//! features:
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.2.0", features = ["notify"] }
+//! errs = { version = "0.2.0", features = ["errs-notify"] }
 //! ```
 //!
 //! ## Usage
@@ -98,8 +99,8 @@
 
 mod err;
 
-#[cfg(feature = "notify")]
-#[cfg_attr(docsrs, doc(cfg(feature = "notify")))]
+#[cfg(feature = "errs-notify")]
+#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
 pub use err::{add_raw_async_err_handler, add_sync_err_handler, fix_err_handlers};
 
 use std::any;
