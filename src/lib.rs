@@ -76,7 +76,7 @@
 //! synchronously or asynchronously.
 //! To register error handlers that receive notifications synchronously, use the
 //! `add_sync_err_handler` function.
-//! For asynchronous notifications, use the `add_async_err_handler!` macro function.
+//! For asynchronous notifications, use the `add_async_err_handler!` macro.
 //!
 //! Error notifications will not occur until the `fix_err_handlers` function is called.
 //! This function locks the current set of error handlers, preventing further additions and
