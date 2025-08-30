@@ -293,7 +293,7 @@ impl Drop for Err {
     fn drop(&mut self) {
         let ptr = self.reason_container.as_ptr();
         let drop_fn = unsafe { (*ptr).drop_fn };
-        drop_fn(ptr);
+        drop_fn(unsafe { ptr::NonNull::new_unchecked(ptr) });
     }
 }
 
@@ -303,7 +303,7 @@ impl fmt::Debug for Err {
         let debug_fn = unsafe { (*ptr).debug_fn };
 
         write!(f, "{} {{ reason = ", any::type_name::<Err>())?;
-        debug_fn(ptr, f)?;
+        debug_fn(unsafe { ptr::NonNull::new_unchecked(ptr) }, f)?;
 
         write!(f, ", file = {}, line = {}", self.file, self.line)?;
 
@@ -319,7 +319,7 @@ impl fmt::Display for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ptr = self.reason_container.as_ptr();
         let display_fn = unsafe { (*ptr).display_fn };
-        display_fn(ptr, f)
+        display_fn(unsafe { ptr::NonNull::new_unchecked(ptr) }, f)
     }
 }
 
@@ -360,11 +360,11 @@ where
     any::TypeId::of::<R>() == type_id
 }
 
-fn drop_reason<R>(ptr: *const ReasonContainer)
+fn drop_reason<R>(ptr: ptr::NonNull<ReasonContainer>)
 where
     R: fmt::Debug + Send + Sync + 'static,
 {
-    let typed_ptr = ptr as *mut ReasonContainer<R>;
+    let typed_ptr = ptr.cast::<ReasonContainer<R>>().as_ptr();
     unsafe {
         match &(*typed_ptr).is_referenced_by_another {
             Some(atomic_bool) => {
@@ -384,21 +384,21 @@ where
     }
 }
 
-fn debug_reason<R>(ptr: *const ReasonContainer, f: &mut fmt::Formatter<'_>) -> fmt::Result
+fn debug_reason<R>(ptr: ptr::NonNull<ReasonContainer>, f: &mut fmt::Formatter<'_>) -> fmt::Result
 where
     R: fmt::Debug + Send + Sync + 'static,
 {
-    let typed_ptr = ptr as *mut ReasonContainer<R>;
+    let typed_ptr = ptr.cast::<ReasonContainer<R>>().as_ptr();
     write!(f, "{} {:?}", any::type_name::<R>(), unsafe {
         &(*typed_ptr).reason
     })
 }
 
-fn display_reason<R>(ptr: *const ReasonContainer, f: &mut fmt::Formatter<'_>) -> fmt::Result
+fn display_reason<R>(ptr: ptr::NonNull<ReasonContainer>, f: &mut fmt::Formatter<'_>) -> fmt::Result
 where
     R: fmt::Debug + Send + Sync + 'static,
 {
-    let typed_ptr = ptr as *mut ReasonContainer<R>;
+    let typed_ptr = ptr.cast::<ReasonContainer<R>>().as_ptr();
     write!(f, "{:?}", unsafe { &(*typed_ptr).reason })
 }
 
