@@ -145,9 +145,9 @@ where
     R: fmt::Debug + Send + Sync + 'static,
 {
     is_fn: fn(any::TypeId) -> bool,
-    drop_fn: fn(*const ReasonContainer),
-    debug_fn: fn(*const ReasonContainer, f: &mut fmt::Formatter<'_>) -> fmt::Result,
-    display_fn: fn(*const ReasonContainer, f: &mut fmt::Formatter<'_>) -> fmt::Result,
+    drop_fn: fn(ptr::NonNull<ReasonContainer>),
+    debug_fn: fn(ptr::NonNull<ReasonContainer>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
+    display_fn: fn(ptr::NonNull<ReasonContainer>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     reason: R,
     is_referenced_by_another: Option<atomic::AtomicBool>,
 }
