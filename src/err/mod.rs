@@ -14,6 +14,7 @@ use notify::{can_notify, notify_err_async, notify_err_sync, will_notify_async};
 use std::any;
 use std::error;
 use std::fmt;
+use std::marker::PhantomData;
 use std::panic;
 use std::ptr;
 use std::sync::{self, atomic};
@@ -23,8 +24,11 @@ unsafe impl<T: Send + Sync> Send for SendSyncNonNull<T> {}
 unsafe impl<T: Send + Sync> Sync for SendSyncNonNull<T> {}
 
 impl<T: Send + Sync> SendSyncNonNull<T> {
-    fn as_ptr(&self) -> *mut T {
-        self.0.as_ptr()
+    fn new(non_null_ptr: ptr::NonNull<T>) -> Self {
+        Self {
+            non_null_ptr,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -68,7 +72,7 @@ impl Err {
                 let err = Self {
                     file: loc.file(),
                     line: loc.line(),
-                    reason_container: SendSyncNonNull(ptr),
+                    reason_container: SendSyncNonNull::new(ptr),
                     source: None,
                 };
                 notify_err_sync(&err, &tm);
@@ -76,7 +80,7 @@ impl Err {
                 let err_notified = Self {
                     file: err.file,
                     line: err.line,
-                    reason_container: SendSyncNonNull(ptr),
+                    reason_container: SendSyncNonNull::new(ptr),
                     source: None,
                 };
                 notify_err_async(err_notified, tm);
@@ -89,7 +93,7 @@ impl Err {
                 let err = Self {
                     file: loc.file(),
                     line: loc.line(),
-                    reason_container: SendSyncNonNull(ptr),
+                    reason_container: SendSyncNonNull::new(ptr),
                     source: None,
                 };
                 notify_err_sync(&err, &tm);
@@ -103,7 +107,7 @@ impl Err {
         Self {
             file: loc.file(),
             line: loc.line(),
-            reason_container: SendSyncNonNull(ptr),
+            reason_container: SendSyncNonNull::new(ptr),
             source: None,
         }
     }
@@ -153,7 +157,7 @@ impl Err {
                 let err = Self {
                     file: loc.file(),
                     line: loc.line(),
-                    reason_container: SendSyncNonNull(ptr),
+                    reason_container: SendSyncNonNull::new(ptr),
                     source: Some(Box::new(src_arc.clone())),
                 };
                 notify_err_sync(&err, &tm);
@@ -161,7 +165,7 @@ impl Err {
                 let err_notified = Self {
                     file: err.file,
                     line: err.line,
-                    reason_container: SendSyncNonNull(ptr),
+                    reason_container: SendSyncNonNull::new(ptr),
                     source: Some(Box::new(src_arc)),
                 };
                 notify_err_async(err_notified, tm);
@@ -174,7 +178,7 @@ impl Err {
                 let err = Self {
                     file: loc.file(),
                     line: loc.line(),
-                    reason_container: SendSyncNonNull(ptr),
+                    reason_container: SendSyncNonNull::new(ptr),
                     source: Some(Box::new(source)),
                 };
                 notify_err_sync(&err, &tm);
@@ -189,7 +193,7 @@ impl Err {
         Self {
             file: loc.file(),
             line: loc.line(),
-            reason_container: SendSyncNonNull(ptr),
+            reason_container: SendSyncNonNull::new(ptr),
             source: Some(Box::new(source)),
         }
     }
@@ -232,7 +236,7 @@ impl Err {
         R: fmt::Debug + Send + Sync + 'static,
     {
         let type_id = any::TypeId::of::<R>();
-        let ptr = self.reason_container.as_ptr();
+        let ptr = self.reason_container.non_null_ptr.as_ptr();
         let is_fn = unsafe { (*ptr).is_fn };
         if is_fn(type_id) {
             let typed_ptr = ptr as *const ReasonContainer<R>;
@@ -278,7 +282,7 @@ impl Err {
         R: fmt::Debug + Send + Sync + 'static,
     {
         let type_id = any::TypeId::of::<R>();
-        let ptr = self.reason_container.as_ptr();
+        let ptr = self.reason_container.non_null_ptr.as_ptr();
         let is_fn = unsafe { (*ptr).is_fn };
         if is_fn(type_id) {
             let typed_ptr = ptr as *const ReasonContainer<R>;
@@ -291,19 +295,19 @@ impl Err {
 
 impl Drop for Err {
     fn drop(&mut self) {
-        let ptr = self.reason_container.as_ptr();
+        let ptr = self.reason_container.non_null_ptr.as_ptr();
         let drop_fn = unsafe { (*ptr).drop_fn };
-        drop_fn(unsafe { ptr::NonNull::new_unchecked(ptr) });
+        drop_fn(self.reason_container.non_null_ptr);
     }
 }
 
 impl fmt::Debug for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ptr = self.reason_container.as_ptr();
+        let ptr = self.reason_container.non_null_ptr.as_ptr();
         let debug_fn = unsafe { (*ptr).debug_fn };
 
         write!(f, "{} {{ reason = ", any::type_name::<Err>())?;
-        debug_fn(unsafe { ptr::NonNull::new_unchecked(ptr) }, f)?;
+        debug_fn(self.reason_container.non_null_ptr, f)?;
 
         write!(f, ", file = {}, line = {}", self.file, self.line)?;
 
@@ -317,9 +321,9 @@ impl fmt::Debug for Err {
 
 impl fmt::Display for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ptr = self.reason_container.as_ptr();
+        let ptr = self.reason_container.non_null_ptr.as_ptr();
         let display_fn = unsafe { (*ptr).display_fn };
-        display_fn(unsafe { ptr::NonNull::new_unchecked(ptr) }, f)
+        display_fn(self.reason_container.non_null_ptr, f)
     }
 }
 

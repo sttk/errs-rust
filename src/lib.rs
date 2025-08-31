@@ -104,8 +104,10 @@ mod err;
 pub use err::{add_raw_async_err_handler, add_sync_err_handler, fix_err_handlers};
 
 use std::any;
+use std::cell::Cell;
 use std::error;
 use std::fmt;
+use std::marker::PhantomData;
 use std::ptr;
 use std::sync::atomic;
 
@@ -164,4 +166,19 @@ where
 // point to data that is thread-safe. As a result, it is safe to implement Send and Sync using
 // unsafe on this struct itself. By including SendSyncNonNull as a field in another struct,
 // that outer struct can also be made thread-safe.
-struct SendSyncNonNull<T: Send + Sync>(ptr::NonNull<T>);
+struct SendSyncNonNull<T: Send + Sync> {
+    non_null_ptr: ptr::NonNull<T>,
+
+    // NonNull<T> is covariant over T, meaning it can be unsound if T with a shorter lifetime is
+    // cast to a longer one. To solve this, a PhantomData<Cell<T>> field is added to make the type
+    // invariant over T. This prevents the problematic casting. PhantomData is a zero-sized and
+    // zero-cost type that is only used by the compiler.
+    //
+    // While this specific issue won't occur in the current implementation — because
+    // SendSyncNonNull is only used inside Err with a concrete type ReasonContainer<R> that has
+    // a 'static lifetime constraint—the SendSyncNonNull type itself still has the potential for
+    // this kind of unsoundness.
+    //
+    // Therefore, for good measure, this PhantomData<Cell<T>> field is added.
+    _phantom: PhantomData<Cell<T>>,
+}
