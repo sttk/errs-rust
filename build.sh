@@ -17,6 +17,11 @@ format() {
   errcheck $?
 }
 
+lint() {
+  cargo clippy --all-features
+  errcheck $?
+}
+
 compile() {
   cargo build --all-features 
   errcheck $?
@@ -52,7 +57,7 @@ doc() {
 }
 
 msrv() {
-  cargo msrv find --ignore-lockfile --no-check-feedback
+  cargo msrv find --all-features --ignore-lockfile --no-check-feedback
   errcheck $?
 }
 
@@ -61,6 +66,7 @@ if [[ "$#" == "0" ]]; then
   format
   compile
   test
+  lint
   doc
   cover
 
@@ -81,6 +87,9 @@ else
       ;;
     test)
       test
+      ;;
+    lint)
+      lint
       ;;
     doc)
       doc
