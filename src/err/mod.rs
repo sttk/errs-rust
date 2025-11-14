@@ -198,6 +198,18 @@ impl Err {
         }
     }
 
+    /// Gets the name of the source file where the error occurred.
+    #[inline]
+    pub fn file(&self) -> &'static str {
+        self.file
+    }
+
+    /// Gets the line number in the source file where the error occurred.
+    #[inline]
+    pub fn line(&self) -> u32 {
+        self.line
+    }
+
     /// Attempts to retrieve the error's reason as a specific type.
     ///
     /// This method checks whether the stored reason matches the specified type
