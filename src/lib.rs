@@ -85,11 +85,11 @@
 //!
 //! ```rust
 //! errs::add_async_err_handler!(async |err, tm| {
-//!     println!("{}:{}:{} - {}", tm, err.file, err.line, err);
+//!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! });
 //!
 //! errs::add_sync_err_handler(|err, tm| {
-//!     println!("{}:{}:{} - {}", tm, err.file, err.line, err);
+//!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! });
 //!
 //! errs::fix_err_handlers();
@@ -128,12 +128,8 @@ use std::sync::atomic;
 /// This struct is implements the `std::errors::Error` trait, so it can be used as an
 /// common error type in Rust programs.
 pub struct Err {
-    /// The name of the source file where the error occurred.
-    pub file: &'static str,
-
-    /// The line number in the source file where the error occurred.
-    pub line: u32,
-
+    file: &'static str,
+    line: u32,
     reason_container: SendSyncNonNull<ReasonContainer>,
     source: Option<Box<dyn error::Error + Send + Sync>>,
 }
