@@ -381,22 +381,12 @@ where
     R: fmt::Debug + Send + Sync + 'static,
 {
     let typed_ptr = ptr.cast::<ReasonContainer<R>>().as_ptr();
-    unsafe {
-        match &(*typed_ptr).is_referenced_by_another {
-            Some(atomic_bool) => {
-                if let Err(_) = atomic_bool.compare_exchange(
-                    true,
-                    false,
-                    atomic::Ordering::Relaxed,
-                    atomic::Ordering::Relaxed,
-                ) {
-                    drop(Box::from_raw(typed_ptr));
-                }
-            }
-            None => {
-                drop(Box::from_raw(typed_ptr));
-            }
+    if let Some(is_ref_by_another) = unsafe { &(*typed_ptr).is_referenced_by_another } {
+        if !is_ref_by_another.fetch_and(false, atomic::Ordering::AcqRel) {
+            drop(unsafe { Box::from_raw(typed_ptr) });
         }
+    } else {
+        drop(unsafe { Box::from_raw(typed_ptr) });
     }
 }
 
