@@ -101,7 +101,11 @@ mod err;
 
 #[cfg(feature = "errs-notify")]
 #[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
-pub use err::{add_raw_async_err_handler, add_sync_err_handler, fix_err_handlers};
+mod notify;
+
+#[cfg(feature = "errs-notify")]
+#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
+pub use notify::{add_raw_async_err_handler, add_sync_err_handler, fix_err_handlers};
 
 use std::any;
 use std::cell::Cell;
