@@ -109,7 +109,7 @@ pub use notify::{add_raw_async_err_handler, add_sync_err_handler, fix_err_handle
 
 use std::{any, cell, error, fmt, marker, ptr, sync::atomic};
 
-/// Is the struct that represents an error with a reason.
+/// Struct that represents an error with a reason.
 ///
 /// This struct encapsulates the reason for the error, which can be any data type.
 /// Typically, the reason is an enum variant, which makes it easy to uniquely identify
@@ -155,7 +155,7 @@ where
     display_fn: fn(ptr::NonNull<ReasonAndSource>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     source_fn: fn(ptr::NonNull<ReasonAndSource>) -> Option<&'static (dyn error::Error + 'static)>,
     #[cfg(feature = "errs-notify")]
-    is_ref: atomic::AtomicBool,
+    is_referenced_by_another: atomic::AtomicBool,
     reason_and_source: (R, Option<E>),
 }
 

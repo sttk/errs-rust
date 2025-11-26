@@ -298,7 +298,7 @@ where
             display_fn: display_reason_and_source::<R, E>,
             source_fn: get_source::<R, E>,
             #[cfg(feature = "errs-notify")]
-            is_ref: atomic::AtomicBool::new(true),
+            is_referenced_by_another: atomic::AtomicBool::new(true),
             reason_and_source: (reason, None),
         }
     }
@@ -311,7 +311,7 @@ where
             display_fn: display_reason_and_source::<R, E>,
             source_fn: get_source::<R, E>,
             #[cfg(feature = "errs-notify")]
-            is_ref: atomic::AtomicBool::new(true),
+            is_referenced_by_another: atomic::AtomicBool::new(true),
             reason_and_source: (reason, Some(*Box::new(source))),
         }
     }
@@ -332,7 +332,7 @@ where
     let typed_ptr = ptr.cast::<ReasonAndSource<R, E>>().as_ptr();
     #[cfg(feature = "errs-notify")]
     {
-        let is_ref = unsafe { &(*typed_ptr).is_ref };
+        let is_ref = unsafe { &(*typed_ptr).is_referenced_by_another };
         if !is_ref.fetch_and(false, atomic::Ordering::AcqRel) {
             unsafe { drop(Box::from_raw(typed_ptr)) };
         }
