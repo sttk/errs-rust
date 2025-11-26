@@ -2,28 +2,24 @@
 // This program is free software under MIT License.
 // See the file LICENSE in this distribution for more details.
 
-use crate::{Err, ReasonContainer, SendSyncNonNull};
+use crate::{Err, ReasonAndSource, SendSyncNonNull};
 
 #[cfg(feature = "errs-notify")]
-use crate::notify::{can_notify, notify_err_async, notify_err_sync, will_notify_async};
+use crate::notify;
 
-use std::any;
-use std::error;
-use std::fmt;
-use std::marker::PhantomData;
-use std::panic;
-use std::ptr;
-use std::sync::{self, atomic};
+use std::{any, error, fmt, marker, panic, ptr};
+
+#[cfg(feature = "errs-notify")]
+use std::sync::atomic;
 
 unsafe impl<T: Send + Sync> Send for SendSyncNonNull<T> {}
-
 unsafe impl<T: Send + Sync> Sync for SendSyncNonNull<T> {}
 
 impl<T: Send + Sync> SendSyncNonNull<T> {
     fn new(non_null_ptr: ptr::NonNull<T>) -> Self {
         Self {
             non_null_ptr,
-            _phantom: PhantomData,
+            _phantom: marker::PhantomData,
         }
     }
 }
@@ -57,54 +53,33 @@ impl Err {
     {
         let loc = panic::Location::caller();
 
+        let boxed = Box::new(ReasonAndSource::<R>::new(reason));
+        let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonAndSource>();
+
         #[cfg(feature = "errs-notify")]
-        if can_notify() {
+        {
+            let err_notified = Self {
+                file: loc.file(),
+                line: loc.line(),
+                reason_and_source: SendSyncNonNull::new(ptr),
+            };
             let tm = chrono::Utc::now();
+            notify::notify_err_sync(&err_notified, &tm);
+            notify::notify_err_async(err_notified, tm);
 
-            if will_notify_async() {
-                let boxed = Box::new(ReasonContainer::<R>::new(reason, true));
-                let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonContainer>();
-
-                let err = Self {
-                    file: loc.file(),
-                    line: loc.line(),
-                    reason_container: SendSyncNonNull::new(ptr),
-                    source: None,
-                };
-                notify_err_sync(&err, &tm);
-
-                let err_notified = Self {
-                    file: err.file,
-                    line: err.line,
-                    reason_container: SendSyncNonNull::new(ptr),
-                    source: None,
-                };
-                notify_err_async(err_notified, tm);
-
-                return err;
-            } else {
-                let boxed = Box::new(ReasonContainer::<R>::new(reason, false));
-                let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonContainer>();
-
-                let err = Self {
-                    file: loc.file(),
-                    line: loc.line(),
-                    reason_container: SendSyncNonNull::new(ptr),
-                    source: None,
-                };
-                notify_err_sync(&err, &tm);
-
-                return err;
+            Self {
+                file: loc.file(),
+                line: loc.line(),
+                reason_and_source: SendSyncNonNull::new(ptr),
             }
         }
-
-        let boxed = Box::new(ReasonContainer::<R>::new(reason, false));
-        let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonContainer>();
-        Self {
-            file: loc.file(),
-            line: loc.line(),
-            reason_container: SendSyncNonNull::new(ptr),
-            source: None,
+        #[cfg(not(feature = "errs-notify"))]
+        {
+            Self {
+                file: loc.file(),
+                line: loc.line(),
+                reason_and_source: SendSyncNonNull::new(ptr),
+            }
         }
     }
 
@@ -141,56 +116,33 @@ impl Err {
     {
         let loc = panic::Location::caller();
 
+        let boxed = Box::new(ReasonAndSource::<R, E>::with_source(reason, source));
+        let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonAndSource>();
+
         #[cfg(feature = "errs-notify")]
-        if can_notify() {
+        {
+            let err_notified = Self {
+                file: loc.file(),
+                line: loc.line(),
+                reason_and_source: SendSyncNonNull::new(ptr),
+            };
             let tm = chrono::Utc::now();
+            notify::notify_err_sync(&err_notified, &tm);
+            notify::notify_err_async(err_notified, tm);
 
-            if will_notify_async() {
-                let boxed = Box::new(ReasonContainer::<R>::new(reason, true));
-                let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonContainer>();
-                let src_arc = sync::Arc::<E>::new(source);
-
-                let err = Self {
-                    file: loc.file(),
-                    line: loc.line(),
-                    reason_container: SendSyncNonNull::new(ptr),
-                    source: Some(Box::new(src_arc.clone())),
-                };
-                notify_err_sync(&err, &tm);
-
-                let err_notified = Self {
-                    file: err.file,
-                    line: err.line,
-                    reason_container: SendSyncNonNull::new(ptr),
-                    source: Some(Box::new(src_arc)),
-                };
-                notify_err_async(err_notified, tm);
-
-                return err;
-            } else {
-                let boxed = Box::new(ReasonContainer::<R>::new(reason, false));
-                let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonContainer>();
-
-                let err = Self {
-                    file: loc.file(),
-                    line: loc.line(),
-                    reason_container: SendSyncNonNull::new(ptr),
-                    source: Some(Box::new(source)),
-                };
-                notify_err_sync(&err, &tm);
-
-                return err;
+            Self {
+                file: loc.file(),
+                line: loc.line(),
+                reason_and_source: SendSyncNonNull::new(ptr),
             }
         }
-
-        let boxed = Box::new(ReasonContainer::<R>::new(reason, false));
-        let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonContainer>();
-
-        Self {
-            file: loc.file(),
-            line: loc.line(),
-            reason_container: SendSyncNonNull::new(ptr),
-            source: Some(Box::new(source)),
+        #[cfg(not(feature = "errs-notify"))]
+        {
+            Self {
+                file: loc.file(),
+                line: loc.line(),
+                reason_and_source: SendSyncNonNull::new(ptr),
+            }
         }
     }
 
@@ -244,14 +196,14 @@ impl Err {
         R: fmt::Debug + Send + Sync + 'static,
     {
         let type_id = any::TypeId::of::<R>();
-        let ptr = self.reason_container.non_null_ptr.as_ptr();
+        let ptr = self.reason_and_source.non_null_ptr.as_ptr();
         let is_fn = unsafe { (*ptr).is_fn };
         if is_fn(type_id) {
-            let typed_ptr = ptr as *const ReasonContainer<R>;
-            return Ok(unsafe { &((*typed_ptr).reason) });
+            let typed_ptr = ptr as *const ReasonAndSource<R>;
+            Ok(unsafe { &((*typed_ptr).reason_and_source.0) })
+        } else {
+            Err(self)
         }
-
-        Err(self)
     }
 
     /// Executes a function if the error's reason matches a specific type.
@@ -290,11 +242,11 @@ impl Err {
         R: fmt::Debug + Send + Sync + 'static,
     {
         let type_id = any::TypeId::of::<R>();
-        let ptr = self.reason_container.non_null_ptr.as_ptr();
+        let ptr = self.reason_and_source.non_null_ptr.as_ptr();
         let is_fn = unsafe { (*ptr).is_fn };
         if is_fn(type_id) {
-            let typed_ptr = ptr as *const ReasonContainer<R>;
-            func(unsafe { &((*typed_ptr).reason) });
+            let typed_ptr = ptr as *const ReasonAndSource<R>;
+            func(unsafe { &((*typed_ptr).reason_and_source.0) });
         }
 
         self
@@ -303,64 +255,64 @@ impl Err {
 
 impl Drop for Err {
     fn drop(&mut self) {
-        let ptr = self.reason_container.non_null_ptr.as_ptr();
-        let drop_fn = unsafe { (*ptr).drop_fn };
-        drop_fn(self.reason_container.non_null_ptr);
+        let drop_fn = unsafe { (*self.reason_and_source.non_null_ptr.as_ptr()).drop_fn };
+        drop_fn(self.reason_and_source.non_null_ptr);
     }
 }
 
 impl fmt::Debug for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ptr = self.reason_container.non_null_ptr.as_ptr();
-        let debug_fn = unsafe { (*ptr).debug_fn };
+        let debug_fn = unsafe { (*self.reason_and_source.non_null_ptr.as_ptr()).debug_fn };
 
-        write!(f, "{} {{ reason = ", any::type_name::<Err>())?;
-        debug_fn(self.reason_container.non_null_ptr, f)?;
-
+        write!(f, "{} {{ ", any::type_name::<Err>())?;
+        debug_fn(self.reason_and_source.non_null_ptr, f)?;
         write!(f, ", file = {}, line = {}", self.file, self.line)?;
-
-        if let Some(src) = &self.source {
-            write!(f, ", source = {:?}", src)?;
-        }
-
         write!(f, " }}")
     }
 }
 
 impl fmt::Display for Err {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ptr = self.reason_container.non_null_ptr.as_ptr();
-        let display_fn = unsafe { (*ptr).display_fn };
-        display_fn(self.reason_container.non_null_ptr, f)
+        let display_fn = unsafe { (*self.reason_and_source.non_null_ptr.as_ptr()).display_fn };
+        display_fn(self.reason_and_source.non_null_ptr, f)
     }
 }
 
 impl error::Error for Err {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        self.source
-            .as_deref()
-            .map(|e| e as &(dyn error::Error + 'static))
+        let source_fn = unsafe { (*self.reason_and_source.non_null_ptr.as_ptr()).source_fn };
+        source_fn(self.reason_and_source.non_null_ptr)
     }
 }
 
-impl<R> ReasonContainer<R>
+impl<R, E> ReasonAndSource<R, E>
 where
     R: fmt::Debug + Send + Sync + 'static,
+    E: error::Error + Send + Sync + 'static,
 {
-    fn new(reason: R, use_async_handler: bool) -> Self {
-        let is_referenced_by_another = if use_async_handler {
-            Some(atomic::AtomicBool::new(use_async_handler))
-        } else {
-            None
-        };
-
+    fn new(reason: R) -> Self {
         Self {
             is_fn: is_reason::<R>,
-            drop_fn: drop_reason::<R>,
-            debug_fn: debug_reason::<R>,
-            display_fn: display_reason::<R>,
-            reason,
-            is_referenced_by_another,
+            drop_fn: drop_reason_and_source::<R, E>,
+            debug_fn: debug_reason_and_source::<R, E>,
+            display_fn: display_reason_and_source::<R, E>,
+            source_fn: get_source::<R, E>,
+            #[cfg(feature = "errs-notify")]
+            is_referenced_by_another: atomic::AtomicBool::new(true),
+            reason_and_source: (reason, None),
+        }
+    }
+
+    fn with_source(reason: R, source: E) -> Self {
+        Self {
+            is_fn: is_reason::<R>,
+            drop_fn: drop_reason_and_source::<R, E>,
+            debug_fn: debug_reason_and_source::<R, E>,
+            display_fn: display_reason_and_source::<R, E>,
+            source_fn: get_source::<R, E>,
+            #[cfg(feature = "errs-notify")]
+            is_referenced_by_another: atomic::AtomicBool::new(true),
+            reason_and_source: (reason, Some(*Box::new(source))),
         }
     }
 }
@@ -372,64 +324,83 @@ where
     any::TypeId::of::<R>() == type_id
 }
 
-fn drop_reason<R>(ptr: ptr::NonNull<ReasonContainer>)
+fn drop_reason_and_source<R, E>(ptr: ptr::NonNull<ReasonAndSource>)
 where
     R: fmt::Debug + Send + Sync + 'static,
+    E: error::Error + Send + Sync + 'static,
 {
-    let typed_ptr = ptr.cast::<ReasonContainer<R>>().as_ptr();
-    unsafe {
-        match &(*typed_ptr).is_referenced_by_another {
-            Some(atomic_bool) => {
-                if atomic_bool
-                    .compare_exchange(
-                        true,
-                        false,
-                        atomic::Ordering::Relaxed,
-                        atomic::Ordering::Relaxed,
-                    )
-                    .is_err()
-                {
-                    drop(Box::from_raw(typed_ptr));
-                }
-            }
-            None => {
-                drop(Box::from_raw(typed_ptr));
-            }
+    let typed_ptr = ptr.cast::<ReasonAndSource<R, E>>().as_ptr();
+    #[cfg(feature = "errs-notify")]
+    {
+        let is_ref = unsafe { &(*typed_ptr).is_referenced_by_another };
+        if !is_ref.fetch_and(false, atomic::Ordering::AcqRel) {
+            unsafe { drop(Box::from_raw(typed_ptr)) };
         }
+    }
+    #[cfg(not(feature = "errs-notify"))]
+    {
+        unsafe { drop(Box::from_raw(typed_ptr)) };
     }
 }
 
-fn debug_reason<R>(ptr: ptr::NonNull<ReasonContainer>, f: &mut fmt::Formatter<'_>) -> fmt::Result
+fn debug_reason_and_source<R, E>(
+    ptr: ptr::NonNull<ReasonAndSource>,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result
 where
     R: fmt::Debug + Send + Sync + 'static,
+    E: error::Error + Send + Sync + 'static,
 {
-    let typed_ptr = ptr.cast::<ReasonContainer<R>>().as_ptr();
-    write!(f, "{} {:?}", any::type_name::<R>(), unsafe {
-        &(*typed_ptr).reason
-    })
+    let typed_ptr = ptr.cast::<ReasonAndSource<R, E>>().as_ptr();
+    let reason_and_source = unsafe { &(*typed_ptr).reason_and_source };
+    write!(
+        f,
+        "reason = {} {:?}",
+        any::type_name::<R>(),
+        reason_and_source.0
+    )?;
+
+    match &reason_and_source.1 {
+        Some(src) => write!(f, ", source = {:?}", src),
+        None => Ok(()),
+    }
 }
 
-fn display_reason<R>(ptr: ptr::NonNull<ReasonContainer>, f: &mut fmt::Formatter<'_>) -> fmt::Result
+fn display_reason_and_source<R, E>(
+    ptr: ptr::NonNull<ReasonAndSource>,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result
 where
     R: fmt::Debug + Send + Sync + 'static,
+    E: error::Error + Send + Sync + 'static,
 {
-    let typed_ptr = ptr.cast::<ReasonContainer<R>>().as_ptr();
-    write!(f, "{:?}", unsafe { &(*typed_ptr).reason })
+    let typed_ptr = ptr.cast::<ReasonAndSource<R, E>>().as_ptr();
+    write!(f, "{:?}", unsafe { &(*typed_ptr).reason_and_source.0 })
+}
+
+fn get_source<R, E>(
+    ptr: ptr::NonNull<ReasonAndSource>,
+) -> Option<&'static (dyn error::Error + 'static)>
+where
+    R: fmt::Debug + Send + Sync + 'static,
+    E: error::Error + Send + Sync + 'static,
+{
+    let typed_ptr = ptr.cast::<ReasonAndSource<R, E>>().as_ptr();
+    match unsafe { &(*typed_ptr).reason_and_source.1 } {
+        Some(src) => Some(src),
+        None => None,
+    }
 }
 
 #[cfg(test)]
 mod tests_of_err {
     use super::*;
-    use std::error::Error;
     use std::sync::{LazyLock, Mutex};
 
     struct Logger {
         log_vec: Vec<String>,
     }
 
-    const BASE_LINE: u32 = line!();
-
-    #[allow(dead_code)]
     impl Logger {
         fn new() -> Self {
             Self {
@@ -448,14 +419,12 @@ mod tests_of_err {
                 assert_eq!(self.log_vec[i], logs[i]);
             }
         }
-        fn clear(&mut self) {
-            self.log_vec.clear();
-        }
     }
+
+    const BASE_LINE: u32 = line!();
 
     mod test_of_drop {
         use super::*;
-        use std::thread;
 
         static LOGGER: LazyLock<Mutex<Logger>> = LazyLock::new(|| Mutex::new(Logger::new()));
 
@@ -463,7 +432,6 @@ mod tests_of_err {
         #[derive(Debug)]
         enum Enum0 {
             InvalidValue { name: String, value: String },
-            FailToGetValue { name: String },
         }
         impl Drop for Enum0 {
             fn drop(&mut self) {
@@ -489,12 +457,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_drop::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 45),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_drop::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 19),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_drop::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 45),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_drop::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 19),
             );
 
             LOGGER.lock().unwrap().log("consumed Enum0");
@@ -503,7 +471,9 @@ mod tests_of_err {
         #[test]
         fn test() {
             consume_err();
-            thread::sleep(std::time::Duration::from_millis(200));
+
+            std::thread::sleep(std::time::Duration::from_secs(1));
+
             LOGGER.lock().unwrap().log("end");
 
             LOGGER.lock().unwrap().assert_logs(&[
@@ -517,26 +487,25 @@ mod tests_of_err {
 
     mod test_of_new {
         use super::*;
+        use std::error::Error;
 
-        #[allow(dead_code)]
         #[derive(Debug)]
         enum Enum0 {
             InvalidValue { name: String, value: String },
-            FailToGetValue { name: String },
         }
 
         #[test]
-        fn reason_is_enum() {
+        fn new_err() {
             let err = Err::new(Enum0::InvalidValue {
                 name: "foo".to_string(),
                 value: "abc".to_string(),
             });
 
             #[cfg(unix)]
-            assert_eq!(err.file, "src/err.rs");
+            assert_eq!(err.file(), "src/err.rs");
             #[cfg(windows)]
-            assert_eq!(err.file, "src\\err.rs");
-            assert_eq!(err.line, BASE_LINE + 100);
+            assert_eq!(err.file(), "src\\err.rs");
+            assert_eq!(err.line(), BASE_LINE + 75);
             assert_eq!(
                 format!("{err}"),
                 "InvalidValue { name: \"foo\", value: \"abc\" }",
@@ -544,14 +513,31 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 100),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 75),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 100),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 75),
             );
+
+            match err.reason::<Enum0>().unwrap() {
+                Enum0::InvalidValue { name, value } => {
+                    assert_eq!(name, "foo");
+                    assert_eq!(value, "abc");
+                }
+            }
             assert!(err.source().is_none());
+        }
+    }
+
+    mod test_of_with_source {
+        use super::*;
+        use std::error::Error;
+
+        #[derive(Debug)]
+        enum Enum0 {
+            InvalidValue { name: String, value: String },
         }
 
         #[test]
@@ -570,7 +556,7 @@ mod tests_of_err {
             #[cfg(windows)]
             assert_eq!(err.file, "src\\err.rs");
 
-            assert_eq!(err.line, BASE_LINE + 130);
+            assert_eq!(err.line, BASE_LINE + 122);
             assert_eq!(
                 format!("{err}"),
                 "InvalidValue { name: \"foo\", value: \"abc\" }",
@@ -579,17 +565,33 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err.rs, line = {}, source = Custom {{ kind: NotFound, error: \"oh no!\" }} }}", BASE_LINE + 130),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = Custom {{ kind: NotFound, error: \"oh no!\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 122),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err.rs, line = {}, source = Custom {{ kind: NotFound, error: \"oh no!\" }} }}", BASE_LINE + 130),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = Custom {{ kind: NotFound, error: \"oh no!\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 122),
             );
+
+            match err.reason::<Enum0>().unwrap() {
+                Enum0::InvalidValue { name, value } => {
+                    assert_eq!(name, "foo");
+                    assert_eq!(value, "abc");
+                }
+            }
+
             assert!(err.source().is_some());
+            match err.source() {
+                Some(e) => match e.downcast_ref::<std::io::Error>() {
+                    Some(io_err) => {
+                        assert_eq!((*io_err).kind(), std::io::ErrorKind::NotFound);
+                    }
+                    _ => unreachable!(),
+                },
+                None => unreachable!(),
+            }
         }
 
-        #[allow(dead_code)]
         #[derive(Debug)]
         struct MyError {
             message: String,
@@ -609,7 +611,7 @@ mod tests_of_err {
         impl error::Error for MyError {}
 
         #[test]
-        fn source_is_a_custom_error() {
+        fn source_is_a_user_defined_error() {
             let source = MyError::new("hello");
             let err = Err::with_source(
                 Enum0::InvalidValue {
@@ -623,7 +625,7 @@ mod tests_of_err {
             assert_eq!(err.file, "src/err.rs");
             #[cfg(windows)]
             assert_eq!(err.file, "src\\err.rs");
-            assert_eq!(err.line, BASE_LINE + 184);
+            assert_eq!(err.line, BASE_LINE + 192);
             assert_eq!(
                 format!("{err}"),
                 "InvalidValue { name: \"foo\", value: \"abc\" }",
@@ -631,48 +633,30 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err.rs, line = {}, source = MyError {{ message: \"hello\" }} }}", BASE_LINE + 184),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = MyError {{ message: \"hello\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 192),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err.rs, line = {}, source = MyError {{ message: \"hello\" }} }}", BASE_LINE + 184),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = MyError {{ message: \"hello\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 192),
             );
+
             assert!(err.source().is_some());
-        }
-
-        #[test]
-        fn source_is_also_a_errs_err() {
-            let source = Err::new(Enum0::InvalidValue {
-                name: "foo".to_string(),
-                value: "abc".to_string(),
-            });
-
-            let err = Err::with_source(
-                Enum0::FailToGetValue {
-                    name: "foo".to_string(),
+            match err.source() {
+                Some(e) => match e.downcast_ref::<MyError>() {
+                    Some(my_err) => {
+                        assert_eq!((*my_err).message, "hello".to_string());
+                    }
+                    _ => unreachable!(),
                 },
-                source,
-            );
-
-            #[cfg(unix)]
-            assert_eq!(err.file, "src/err.rs");
-            #[cfg(windows)]
-            assert_eq!(err.file, "src\\err.rs");
-            assert_eq!(err.line, BASE_LINE + 221);
-            assert_eq!(format!("{err}"), "FailToGetValue { name: \"foo\" }",);
-            #[cfg(unix)]
-            assert_eq!(
-                format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 FailToGetValue {{ name: \"foo\" }}, file = src/err.rs, line = {}, source = errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err.rs, line = {} }} }}", BASE_LINE + 221, BASE_LINE + 216),
-            );
-            #[cfg(windows)]
-            assert_eq!(
-                format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 FailToGetValue {{ name: \"foo\" }}, file = src\\err.rs, line = {}, source = errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err.rs, line = {} }} }}", BASE_LINE + 221, BASE_LINE + 216),
-            );
-            assert!(err.source().is_some());
+                None => unreachable!(),
+            }
         }
+    }
+
+    mod test_of_reason {
+        use super::*;
+        use std::error::Error;
 
         #[test]
         fn reason_is_a_boolean() {
@@ -683,7 +667,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = bool true, file = src/err.rs, line = {} }}",
-                    BASE_LINE + 249,
+                    BASE_LINE + 239,
                 ),
             );
             #[cfg(windows)]
@@ -691,9 +675,16 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = bool true, file = src\\err.rs, line = {} }}",
-                    BASE_LINE + 249,
+                    BASE_LINE + 239,
                 ),
             );
+
+            match err.reason() {
+                Ok(true) => {}
+                Ok(false) => unreachable!(),
+                Err(_) => unreachable!(),
+            }
+
             assert!(err.source().is_none());
         }
 
@@ -706,7 +697,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = i64 123, file = src/err.rs, line = {} }}",
-                    BASE_LINE + 272,
+                    BASE_LINE + 269,
                 ),
             );
             #[cfg(windows)]
@@ -714,9 +705,15 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = i64 123, file = src\\err.rs, line = {} }}",
-                    BASE_LINE + 272,
+                    BASE_LINE + 269,
                 ),
             );
+
+            match err.reason::<i64>() {
+                Ok(n) => assert_eq!(*n, 123i64),
+                Err(_) => unreachable!(),
+            }
+
             assert!(err.source().is_none());
         }
 
@@ -727,17 +724,28 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = alloc::string::String \"abc\", file = src/err.rs, line = {} }}", BASE_LINE + 295),
+                format!(
+                    "errs::Err {{ reason = alloc::string::String \"abc\", file = src/err.rs, line = {} }}",
+                    BASE_LINE + 298,
+                ),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = alloc::string::String \"abc\", file = src\\err.rs, line = {} }}", BASE_LINE + 295),
+                format!(
+                    "errs::Err {{ reason = alloc::string::String \"abc\", file = src\\err.rs, line = {} }}",
+                    BASE_LINE + 298,
+                ),
             );
+
+            match err.reason::<String>() {
+                Ok(s) => assert_eq!(s, "abc"),
+                Err(_) => unreachable!(),
+            }
+
             assert!(err.source().is_none());
         }
 
-        #[allow(dead_code)]
         #[derive(Debug)]
         struct StructA {
             name: String,
@@ -754,13 +762,22 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::StructA StructA {{ name: \"abc\", value: 123 }}, file = src/err.rs, line = {} }}", BASE_LINE + 319),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_reason::StructA StructA {{ name: \"abc\", value: 123 }}, file = src/err.rs, line = {} }}", BASE_LINE + 333),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::StructA StructA {{ name: \"abc\", value: 123 }}, file = src\\err.rs, line = {} }}", BASE_LINE + 319),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_reason::StructA StructA {{ name: \"abc\", value: 123 }}, file = src\\err.rs, line = {} }}", BASE_LINE + 333),
             );
+
+            match err.reason::<StructA>() {
+                Ok(st) => {
+                    assert_eq!(st.name, "abc".to_string());
+                    assert_eq!(st.value, 123);
+                }
+                Err(_) => unreachable!(),
+            }
+
             assert!(err.source().is_none());
         }
 
@@ -773,7 +790,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = () (), file = src/err.rs, line = {} }}",
-                    BASE_LINE + 339,
+                    BASE_LINE + 362,
                 ),
             );
             #[cfg(windows)]
@@ -781,14 +798,20 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = () (), file = src\\err.rs, line = {} }}",
-                    BASE_LINE + 339,
+                    BASE_LINE + 362,
                 ),
             );
+
+            match err.reason::<()>() {
+                Ok(()) => {}
+                Err(_) => unreachable!(),
+            }
+
             assert!(err.source().is_none());
         }
     }
 
-    mod match_statement_for_reason {
+    mod test_of_match_reason {
         use super::*;
 
         #[allow(dead_code)]

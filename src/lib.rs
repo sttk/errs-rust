@@ -107,15 +107,9 @@ mod notify;
 #[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
 pub use notify::{add_raw_async_err_handler, add_sync_err_handler, fix_err_handlers};
 
-use std::any;
-use std::cell::Cell;
-use std::error;
-use std::fmt;
-use std::marker::PhantomData;
-use std::ptr;
-use std::sync::atomic;
+use std::{any, cell, error, fmt, marker, ptr, sync::atomic};
 
-/// Is the struct that represents an error with a reason.
+/// Struct that represents an error with a reason.
 ///
 /// This struct encapsulates the reason for the error, which can be any data type.
 /// Typically, the reason is an enum variant, which makes it easy to uniquely identify
@@ -134,24 +128,35 @@ use std::sync::atomic;
 pub struct Err {
     file: &'static str,
     line: u32,
-    reason_container: SendSyncNonNull<ReasonContainer>,
-    source: Option<Box<dyn error::Error + Send + Sync>>,
+    reason_and_source: SendSyncNonNull<ReasonAndSource>,
 }
 
 #[derive(Debug)]
 struct DummyReason {}
 
+#[derive(Debug)]
+struct DummyError {}
+impl fmt::Display for DummyError {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        Ok(())
+    }
+}
+impl error::Error for DummyError {}
+
 #[repr(C)]
-struct ReasonContainer<R = DummyReason>
+struct ReasonAndSource<R = DummyReason, E = DummyError>
 where
     R: fmt::Debug + Send + Sync + 'static,
+    E: error::Error + Send + Sync + 'static,
 {
     is_fn: fn(any::TypeId) -> bool,
-    drop_fn: fn(ptr::NonNull<ReasonContainer>),
-    debug_fn: fn(ptr::NonNull<ReasonContainer>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
-    display_fn: fn(ptr::NonNull<ReasonContainer>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
-    reason: R,
-    is_referenced_by_another: Option<atomic::AtomicBool>,
+    drop_fn: fn(ptr::NonNull<ReasonAndSource>),
+    debug_fn: fn(ptr::NonNull<ReasonAndSource>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
+    display_fn: fn(ptr::NonNull<ReasonAndSource>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
+    source_fn: fn(ptr::NonNull<ReasonAndSource>) -> Option<&'static (dyn error::Error + 'static)>,
+    #[cfg(feature = "errs-notify")]
+    is_referenced_by_another: atomic::AtomicBool,
+    reason_and_source: (R, Option<E>),
 }
 
 // When a struct contains a raw pointer as a field, the compiler cannot guarantee the safety of
@@ -175,10 +180,10 @@ struct SendSyncNonNull<T: Send + Sync> {
     // zero-cost type that is only used by the compiler.
     //
     // While this specific issue won't occur in the current implementation — because
-    // SendSyncNonNull is only used inside Err with a concrete type ReasonContainer<R> that has
+    // SendSyncNonNull is only used inside Err with a concrete type ReasonAndSource<R> that has
     // a 'static lifetime constraint—the SendSyncNonNull type itself still has the potential for
     // this kind of unsoundness.
     //
     // Therefore, for good measure, this PhantomData<Cell<T>> field is added.
-    _phantom: PhantomData<Cell<T>>,
+    _phantom: marker::PhantomData<cell::Cell<T>>,
 }
