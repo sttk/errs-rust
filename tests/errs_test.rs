@@ -154,12 +154,12 @@ mod integration_tests_of_err {
         #[cfg(unix)]
         assert_eq!(
             format!("{err:?}"),
-            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs DueToSomeError { path: \"/aaa/bbb/ccc\" }, file = tests/errs_test.rs, line = 31, source = Custom { kind: AlreadyExists, error: \"/aaa/bbb/ccc\" } }"
+            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs DueToSomeError { path: \"/aaa/bbb/ccc\" }, source = Custom { kind: AlreadyExists, error: \"/aaa/bbb/ccc\" }, file = tests/errs_test.rs, line = 31 }"
         );
         #[cfg(windows)]
         assert_eq!(
             format!("{err:?}"),
-            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs DueToSomeError { path: \"/aaa/bbb/ccc\" }, file = tests\\errs_test.rs, line = 31, source = Custom { kind: AlreadyExists, error: \"/aaa/bbb/ccc\" } }"
+            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs DueToSomeError { path: \"/aaa/bbb/ccc\" }, source = Custom { kind: AlreadyExists, error: \"/aaa/bbb/ccc\" }, file = tests\\errs_test.rs, line = 31 }"
         );
     }
 
