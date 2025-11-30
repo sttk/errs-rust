@@ -84,7 +84,7 @@
 //! enabling notification processing.
 //!
 //! ```rust
-//! errs::add_async_err_handler!(async |err, tm| {
+//! errs::add_async_err_handler(|err, tm| {
 //!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! });
 //!
@@ -105,9 +105,17 @@ mod notify;
 
 #[cfg(feature = "errs-notify")]
 #[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
-pub use notify::{add_raw_async_err_handler, add_sync_err_handler, fix_err_handlers};
+pub use notify::{add_async_err_handler, add_sync_err_handler};
 
-use std::{any, cell, error, fmt, marker, ptr, sync::atomic};
+#[cfg(feature = "errs-notify")]
+#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
+pub use notify::{fix_err_handlers, ErrHandlingError, ErrHandlingErrorKind};
+
+use std::{any, cell, error, fmt, marker, ptr};
+
+#[cfg(feature = "errs-notify")]
+#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
+use std::sync::atomic;
 
 /// Struct that represents an error with a reason.
 ///
