@@ -1,6 +1,6 @@
 # [errs for Rust][repo-url] [![crates.io][cratesio-img]][cratesio-url] [![doc.rs][docrs-img]][docrs-url] [![CI Status][ci-img]][ci-url] [![MIT License][mit-img]][mit-url]
 
-This crate is for error handling in Rust programs, providing an Err struct which represents an error with a reason.
+This crate is for error handling in Rust programs, providing an `Err` struct which represents an error with a reason.
 
 The type of this reason is any, but typically an enum variant is used. The name of this enum variant indicates the reason for the error, and its fields store contextual information about the situation in which the error occurred. Since the path of an enum variant, including its package, is unique within a program, the enum variant representing the reason is useful for identifying the specific error, locating where it occurred, or generating appropriate error messages, etc.
 
@@ -15,7 +15,7 @@ In `Cargo.toml`, write this crate as a dependency:
 errs = "0.3.2"
 ```
 
-If you want to use error notification, specifies `errs-notify` or `full` in the dependency features:
+If you want to use error notification, specifies `errs-notify` in the dependency features:
 
 ```toml
 [dependencies]
@@ -66,14 +66,14 @@ Multiple error handlers can be registered, and you can choose to receive notific
 synchronously or asynchronously.
 To register error handlers that receive notifications synchronously, use the
 `add_sync_err_handler` function.
-For asynchronous notifications, use the `add_async_err_handler!` macro.
+For asynchronous notifications, use the `add_async_err_handler` function.
 
 Error notifications will not occur until the `fix_err_handlers` function is called.
 This function locks the current set of error handlers, preventing further additions and
 enabling notification processing.
 
 ```
-errs::add_async_err_handler!(async |err, tm| {
+errs::add_async_err_handler(|err, tm| {
     println!("{}:{}:{} - {}", tm, err.file, err.line, err);
 });
 
@@ -108,7 +108,7 @@ Compatibility Check #5: Rust 1.79.0
   [FAIL]   Is incompatible
 
 Result:
-   Considered (min … max):   Rust 1.56.1 … Rust 1.91.0
+   Considered (min … max):   Rust 1.56.1 … Rust 1.91.1
    Search method:            bisect
    MSRV:                     1.80.1
    Target:                   x86_64-apple-darwin
