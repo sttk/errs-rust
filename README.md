@@ -15,7 +15,7 @@ In `Cargo.toml`, write this crate as a dependency:
 errs = "0.3.2"
 ```
 
-If you want to use error notification, specifies `errs-notify` in the dependency features:
+If you want to use error notification, specify the `errs-notify` in the dependency features:
 
 ```toml
 [dependencies]
