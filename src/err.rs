@@ -63,9 +63,9 @@ impl Err {
                 line: loc.line(),
                 reason_and_source: SendSyncNonNull::new(ptr),
             };
-            let tm = chrono::Utc::now();
-            notify::notify_err_sync(&err_notified, &tm);
-            notify::notify_err_async(err_notified, tm);
+            if let Err(e) = notify::notify_err(err_notified) {
+                eprintln!("ERROR: {e:?}");
+            }
 
             Self {
                 file: loc.file(),
@@ -126,9 +126,9 @@ impl Err {
                 line: loc.line(),
                 reason_and_source: SendSyncNonNull::new(ptr),
             };
-            let tm = chrono::Utc::now();
-            notify::notify_err_sync(&err_notified, &tm);
-            notify::notify_err_async(err_notified, tm);
+            if let Err(e) = notify::notify_err(err_notified) {
+                eprintln!("ERROR: {e:?}");
+            }
 
             Self {
                 file: loc.file(),

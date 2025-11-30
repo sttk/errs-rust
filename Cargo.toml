@@ -13,21 +13,15 @@ keywords = ["error", "error-handling", "reason", "notify", "notification"]
 categories = ["rust-patterns"]
 
 [dependencies]
-chrono = "0.4"
-futures = "0.3"
-tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+chrono = { version = "0.4", optional = true }
+setup_read_cleanup = { "version" = "0.4", optional = true }
 
 [dev-dependencies]
 trybuild = "1"
 
 [features]
+errs-notify = ["dep:setup_read_cleanup", "dep:chrono"]
 default = []
-
-full = [
-  "errs-notify",
-]
-
-errs-notify = []
 
 [package.metadata.docs.rs]
 all-features = true
