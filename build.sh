@@ -28,7 +28,12 @@ compile() {
 }
 
 test() {
-  cargo test --all-features -- --show-output
+  echo "### features: default"
+  cargo test --features default -- --show-output
+  errcheck $?
+
+  echo "### features: errs-notify"
+  cargo test --features errs-notify -- --show-output
   errcheck $?
 }
 
