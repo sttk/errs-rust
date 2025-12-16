@@ -4,12 +4,12 @@
 
 use crate::{Err, ReasonAndSource, SendSyncNonNull};
 
-#[cfg(feature = "errs-notify")]
+#[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
 use crate::notify;
 
 use std::{any, error, fmt, marker, panic, ptr};
 
-#[cfg(feature = "errs-notify")]
+#[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
 use std::sync::atomic;
 
 unsafe impl<T: Send + Sync> Send for SendSyncNonNull<T> {}
@@ -56,7 +56,7 @@ impl Err {
         let boxed = Box::new(ReasonAndSource::<R>::new(reason));
         let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonAndSource>();
 
-        #[cfg(feature = "errs-notify")]
+        #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
         {
             let err_notified = Self {
                 file: loc.file(),
@@ -64,7 +64,7 @@ impl Err {
                 reason_and_source: SendSyncNonNull::new(ptr),
             };
             if let Err(e) = notify::notify_err(err_notified) {
-                eprintln!("ERROR: {e:?}");
+                eprintln!("ERROR(errs): {e:?}");
             }
 
             Self {
@@ -73,7 +73,7 @@ impl Err {
                 reason_and_source: SendSyncNonNull::new(ptr),
             }
         }
-        #[cfg(not(feature = "errs-notify"))]
+        #[cfg(not(any(feature = "errs-notify", feature = "errs-notify-tokio")))]
         {
             Self {
                 file: loc.file(),
@@ -119,7 +119,7 @@ impl Err {
         let boxed = Box::new(ReasonAndSource::<R, E>::with_source(reason, source));
         let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonAndSource>();
 
-        #[cfg(feature = "errs-notify")]
+        #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
         {
             let err_notified = Self {
                 file: loc.file(),
@@ -127,7 +127,7 @@ impl Err {
                 reason_and_source: SendSyncNonNull::new(ptr),
             };
             if let Err(e) = notify::notify_err(err_notified) {
-                eprintln!("ERROR: {e:?}");
+                eprintln!("ERROR(errs): {e:?}");
             }
 
             Self {
@@ -136,7 +136,7 @@ impl Err {
                 reason_and_source: SendSyncNonNull::new(ptr),
             }
         }
-        #[cfg(not(feature = "errs-notify"))]
+        #[cfg(not(any(feature = "errs-notify", feature = "errs-notify-tokio")))]
         {
             Self {
                 file: loc.file(),
@@ -297,7 +297,7 @@ where
             debug_fn: debug_reason_and_source::<R, E>,
             display_fn: display_reason_and_source::<R, E>,
             source_fn: get_source::<R, E>,
-            #[cfg(feature = "errs-notify")]
+            #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
             is_referenced_by_another: atomic::AtomicBool::new(true),
             reason_and_source: (reason, None),
         }
@@ -310,7 +310,7 @@ where
             debug_fn: debug_reason_and_source::<R, E>,
             display_fn: display_reason_and_source::<R, E>,
             source_fn: get_source::<R, E>,
-            #[cfg(feature = "errs-notify")]
+            #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
             is_referenced_by_another: atomic::AtomicBool::new(true),
             reason_and_source: (reason, Some(*Box::new(source))),
         }
@@ -330,14 +330,14 @@ where
     E: error::Error + Send + Sync + 'static,
 {
     let typed_ptr = ptr.cast::<ReasonAndSource<R, E>>().as_ptr();
-    #[cfg(feature = "errs-notify")]
+    #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
     {
         let is_ref = unsafe { &(*typed_ptr).is_referenced_by_another };
         if !is_ref.fetch_and(false, atomic::Ordering::AcqRel) {
             unsafe { drop(Box::from_raw(typed_ptr)) };
         }
     }
-    #[cfg(not(feature = "errs-notify"))]
+    #[cfg(not(any(feature = "errs-notify", feature = "errs-notify-tokio")))]
     {
         unsafe { drop(Box::from_raw(typed_ptr)) };
     }

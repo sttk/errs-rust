@@ -30,7 +30,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.4.0", features = ["errs-notify"] }
+//! errs = { version = "0.4.0", features = ["errs-notify", "errs-notify-tokio"] }
 //! ```
 //!
 //! ## Usage
@@ -85,16 +85,25 @@
 //!
 //! ```rust
 //! #[cfg(feature = "errs-notify")]
-//! errs::add_async_err_handler(|err, tm| {
-//!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
-//! });
-//!
-//! #[cfg(feature = "errs-notify")]
 //! errs::add_sync_err_handler(|err, tm| {
 //!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! });
 //!
 //! #[cfg(feature = "errs-notify")]
+//! errs::add_async_err_handler(|err, tm| {
+//!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
+//! });
+//!
+//! #[cfg(feature = "errs-notify-tokio")]
+//! errs::add_tokio_async_err_handler(async |err, tm| {
+//!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
+//! });
+//! // When rust version is less than 1.85.0.
+//! //errs::add_tokio_async_err_handler(|err, tm| Box::pin(async move {
+//! //    println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
+//! //}));
+//!
+//! #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
 //! errs::fix_err_handlers();
 //! ```
 
@@ -102,22 +111,35 @@
 
 mod err;
 
-#[cfg(feature = "errs-notify")]
-#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
+#[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(feature = "errs-notify", feature = "errs-notify-tokio")))
+)]
 mod notify;
 
 #[cfg(feature = "errs-notify")]
 #[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
 pub use notify::{add_async_err_handler, add_sync_err_handler};
 
-#[cfg(feature = "errs-notify")]
-#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
+#[cfg(feature = "errs-notify-tokio")]
+#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify-tokio")))]
+pub use notify::add_tokio_async_err_handler;
+
+#[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(feature = "errs-notify", feature = "errs-notify-tokio")))
+)]
 pub use notify::{fix_err_handlers, ErrHandlingError, ErrHandlingErrorKind};
 
 use std::{any, cell, error, fmt, marker, ptr};
 
-#[cfg(feature = "errs-notify")]
-#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
+#[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(feature = "errs-notify", feature = "errs-notify-tokio")))
+)]
 use std::sync::atomic;
 
 /// Struct that represents an error with a reason.
@@ -165,7 +187,7 @@ where
     debug_fn: fn(ptr::NonNull<ReasonAndSource>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     display_fn: fn(ptr::NonNull<ReasonAndSource>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     source_fn: fn(ptr::NonNull<ReasonAndSource>) -> Option<&'static (dyn error::Error + 'static)>,
-    #[cfg(feature = "errs-notify")]
+    #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
     is_referenced_by_another: atomic::AtomicBool,
     reason_and_source: (R, Option<E>),
 }
