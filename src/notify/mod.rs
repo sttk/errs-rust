@@ -6,10 +6,9 @@ mod blocking;
 mod errors;
 
 use crate::Err;
-
-use blocking::{add_async_handler, add_sync_handler, fix_handlers, handle_err, HANDLERS};
-
 use chrono::{DateTime, Utc};
+
+use std::sync;
 
 /// Represents the specific kind of error that can occur within the error handling
 /// notification system.
@@ -47,7 +46,7 @@ pub fn add_async_err_handler<F>(handler: F) -> Result<(), ErrHandlingError>
 where
     F: Fn(&Err, DateTime<Utc>) + Send + Sync + 'static,
 {
-    add_async_handler(&HANDLERS, handler)
+    blocking::add_async_handler(&blocking::HANDLERS, handler)
 }
 
 /// Registers a synchronous error handler.
@@ -68,7 +67,7 @@ pub fn add_sync_err_handler<F>(handler: F) -> Result<(), ErrHandlingError>
 where
     F: Fn(&Err, DateTime<Utc>) + Send + Sync + 'static,
 {
-    add_sync_handler(&HANDLERS, handler)
+    blocking::add_sync_handler(&blocking::HANDLERS, handler)
 }
 
 /// Fixes the set of registered error handlers, preventing any further additions.
@@ -82,10 +81,11 @@ where
 /// - `Ok(())` if the handlers were successfully fixed or were already fixed.
 /// - `Err(ErrHandlingError)` if an error occurred during the fixing process.
 pub fn fix_err_handlers() -> Result<(), ErrHandlingError> {
-    fix_handlers(&HANDLERS)
+    blocking::fix_handlers(&blocking::HANDLERS)
 }
 
 pub(crate) fn notify_err(err: Err) -> Result<(), ErrHandlingError> {
     let tm = Utc::now();
-    handle_err(&HANDLERS, err, tm)
+    let err = sync::Arc::new(err);
+    blocking::handle_err(&blocking::HANDLERS, sync::Arc::clone(&err), tm)
 }

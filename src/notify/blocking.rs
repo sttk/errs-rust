@@ -6,7 +6,7 @@ use super::{ErrHandlingError, ErrHandlingErrorKind};
 use crate::Err;
 
 use chrono::{DateTime, Utc};
-use setup_read_cleanup::{PhasedCellSync, PhasedErrorKind};
+use setup_read_cleanup::{graceful::GracefulPhasedCellSync, PhasedErrorKind};
 
 use std::{sync, thread};
 
@@ -15,12 +15,11 @@ type BoxedFn = Box<dyn Fn(&Err, DateTime<Utc>) + Send + Sync + 'static>;
 #[allow(clippy::type_complexity)]
 const NOOP: fn(&mut (Vec<BoxedFn>, Vec<BoxedFn>)) -> Result<(), ErrHandlingError> = |_| Ok(());
 
-pub(crate) static HANDLERS: PhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)> =
-    PhasedCellSync::new((Vec::new(), Vec::new()));
+pub(crate) static HANDLERS: GracefulPhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)> =
+    GracefulPhasedCellSync::new((Vec::new(), Vec::new()));
 
-#[inline]
 pub(crate) fn add_sync_handler<F>(
-    handlers: &PhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)>,
+    handlers: &GracefulPhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)>,
     handler: F,
 ) -> Result<(), ErrHandlingError>
 where
@@ -35,7 +34,7 @@ where
             PhasedErrorKind::InternalDataUnavailable => Err(ErrHandlingError::new(
                 ErrHandlingErrorKind::InvalidInternalState,
             )),
-            PhasedErrorKind::StdMutexIsPoisoned => Err(ErrHandlingError::new(
+            PhasedErrorKind::InternalDataMutexIsPoisoned => Err(ErrHandlingError::new(
                 ErrHandlingErrorKind::StdMutexIsPoisoned,
             )),
             _ => Err(ErrHandlingError::new(
@@ -46,7 +45,7 @@ where
 }
 
 pub(crate) fn add_async_handler<F>(
-    handlers: &PhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)>,
+    handlers: &GracefulPhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)>,
     handler: F,
 ) -> Result<(), ErrHandlingError>
 where
@@ -61,7 +60,7 @@ where
             PhasedErrorKind::InternalDataUnavailable => Err(ErrHandlingError::new(
                 ErrHandlingErrorKind::InvalidInternalState,
             )),
-            PhasedErrorKind::StdMutexIsPoisoned => Err(ErrHandlingError::new(
+            PhasedErrorKind::InternalDataMutexIsPoisoned => Err(ErrHandlingError::new(
                 ErrHandlingErrorKind::StdMutexIsPoisoned,
             )),
             _ => Err(ErrHandlingError::new(
@@ -71,9 +70,8 @@ where
     }
 }
 
-#[inline]
 pub(crate) fn fix_handlers(
-    handlers: &PhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)>,
+    handlers: &GracefulPhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)>,
 ) -> Result<(), ErrHandlingError> {
     if let Err(e) = handlers.transition_to_read(NOOP) {
         match e.kind() {
@@ -81,7 +79,7 @@ pub(crate) fn fix_handlers(
             PhasedErrorKind::InternalDataUnavailable => Err(ErrHandlingError::new(
                 ErrHandlingErrorKind::InvalidInternalState,
             )),
-            PhasedErrorKind::StdMutexIsPoisoned => Err(ErrHandlingError::new(
+            PhasedErrorKind::InternalDataMutexIsPoisoned => Err(ErrHandlingError::new(
                 ErrHandlingErrorKind::StdMutexIsPoisoned,
             )),
             // PhasedErrorKind::FailToRunClosureDuringTransitionToRead => {}, // impossible case
@@ -95,21 +93,21 @@ pub(crate) fn fix_handlers(
 }
 
 pub(crate) fn handle_err(
-    handlers: &'static PhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)>,
-    err: Err,
+    handlers: &'static GracefulPhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)>,
+    err: sync::Arc<Err>,
     tm: DateTime<Utc>,
 ) -> Result<(), ErrHandlingError> {
     let result = match handlers.transition_to_read(NOOP) {
-        Ok(_) => handlers.read_relaxed(),
+        Ok(_) => handlers.read(),
         Err(e) => match e.kind() {
             PhasedErrorKind::PhaseIsAlreadyRead => handlers.read_relaxed(),
-            PhasedErrorKind::DuringTransitionToRead => handlers.read_ready(),
+            PhasedErrorKind::DuringTransitionToRead => handlers.read(),
             PhasedErrorKind::InternalDataUnavailable => {
                 return Err(ErrHandlingError::new(
                     ErrHandlingErrorKind::InvalidInternalState,
                 ));
             }
-            PhasedErrorKind::StdMutexIsPoisoned => {
+            PhasedErrorKind::InternalDataMutexIsPoisoned => {
                 return Err(ErrHandlingError::new(
                     ErrHandlingErrorKind::StdMutexIsPoisoned,
                 ));
@@ -125,23 +123,24 @@ pub(crate) fn handle_err(
 
     match result {
         Ok(vv) => {
-            let err = sync::Arc::new(err);
-            for handle in vv.1.iter() {
-                let err1 = sync::Arc::clone(&err);
-                thread::spawn(move || handle(&err1, tm));
-            }
+            let err_clone = sync::Arc::clone(&err);
+            thread::spawn(move || {
+                for handle in vv.1.iter() {
+                    let e = sync::Arc::clone(&err_clone);
+                    thread::spawn(move || handle(&e, tm));
+                }
+            });
 
             for handle in vv.0.iter() {
                 handle(&err, tm);
             }
-
             Ok(())
         }
         Err(e) => match e.kind() {
             PhasedErrorKind::InternalDataUnavailable => Err(ErrHandlingError::new(
                 ErrHandlingErrorKind::InvalidInternalState,
             )),
-            PhasedErrorKind::StdMutexIsPoisoned => Err(ErrHandlingError::new(
+            PhasedErrorKind::GracefulWaitMutexIsPoisoned => Err(ErrHandlingError::new(
                 ErrHandlingErrorKind::StdMutexIsPoisoned,
             )),
             _ => Err(ErrHandlingError::new(
@@ -164,8 +163,8 @@ mod tests_of_notify {
         use super::*;
         use std::sync::{LazyLock, Mutex};
 
-        static HANDLERS: PhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)> =
-            PhasedCellSync::new((Vec::new(), Vec::new()));
+        static HANDLERS: GracefulPhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)> =
+            GracefulPhasedCellSync::new((Vec::new(), Vec::new()));
 
         static LOGGERS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
@@ -190,7 +189,7 @@ mod tests_of_notify {
             .is_err());
 
             let err = Err::new(Errors::FailToDoSomething);
-            assert!(handle_err(&HANDLERS, err, Utc::now()).is_ok());
+            assert!(handle_err(&HANDLERS, err.into(), Utc::now()).is_ok());
 
             #[cfg(unix)]
             {
@@ -213,8 +212,8 @@ mod tests_of_notify {
         use super::*;
         use std::sync::{LazyLock, Mutex};
 
-        static HANDLERS: PhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)> =
-            PhasedCellSync::new((Vec::new(), Vec::new()));
+        static HANDLERS: GracefulPhasedCellSync<(Vec<BoxedFn>, Vec<BoxedFn>)> =
+            GracefulPhasedCellSync::new((Vec::new(), Vec::new()));
 
         static LOGGERS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
@@ -242,7 +241,7 @@ mod tests_of_notify {
             .is_err());
 
             let err = Err::new(Errors::FailToDoSomething);
-            assert!(handle_err(&HANDLERS, err, Utc::now()).is_ok());
+            assert!(handle_err(&HANDLERS, err.into(), Utc::now()).is_ok());
 
             {
                 let vec = LOGGERS.lock().unwrap();

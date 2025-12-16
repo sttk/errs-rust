@@ -84,14 +84,17 @@
 //! enabling notification processing.
 //!
 //! ```rust
+//! #[cfg(feature = "errs-notify")]
 //! errs::add_async_err_handler(|err, tm| {
 //!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! });
 //!
+//! #[cfg(feature = "errs-notify")]
 //! errs::add_sync_err_handler(|err, tm| {
 //!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! });
 //!
+//! #[cfg(feature = "errs-notify")]
 //! errs::fix_err_handlers();
 //! ```
 
