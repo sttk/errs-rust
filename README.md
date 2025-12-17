@@ -15,11 +15,19 @@ In `Cargo.toml`, write this crate as a dependency:
 errs = "0.4.0"
 ```
 
-If you want to use error notification, specify the `errs-notify` in the dependency features:
+If you want to use error notification, specify the `errs-notify` or `errs-notify-tokio` in the dependency features.
+The `errs-notify` feature is for general use, while the `errs-notify-tokio` feature is for use with the Tokio runtime.
 
 ```toml
 [dependencies]
 errs = { version = "0.4.0", features = ["errs-notify"] }
+```
+
+If you are using Tokio, you should specify `errs-notify-tokio`:
+
+```toml
+[dependencies]
+errs = { version = "0.4.0", features = ["errs-notify-tokio"] }
 ```
 
 ## Usage

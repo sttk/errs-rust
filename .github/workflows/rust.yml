@@ -11,14 +11,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rustver: ['1.80.1', '1.89.0', '1.92.0']
+        rustver: ['1.85.0', '1.89.0', '1.92.0']
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rustver }}
-      - run: cargo test --all-features -- --show-output
+      - run: cargo test --features default -- --show-output
+      - run: cargo test --features errs-notify -- --show-output
+      - run: cargo test --features errs-notify-tokio -- --show-output
+      - run: cargo test --features full -- --show-output
 
   cover:
     name: Coverage for Rust ${{ matrix.rustver }} on ${{ matrix.os }}
@@ -35,4 +38,4 @@ jobs:
           toolchain: ${{ matrix.rustver }}
           components: llvm-tools-preview
       - run: cargo install cargo-llvm-cov
-      - run: cargo llvm-cov
+      - run: cargo llvm-cov --all-features
