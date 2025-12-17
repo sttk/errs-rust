@@ -16,6 +16,10 @@
 //! possible to receive notifications either synchronously or asynchronously at the time the error
 //! struct is created.
 //!
+//! There is also an `errs-notify-tokio` feature, which is for applications that use the Tokio
+//! runtime. If this feature is used, error notifications are received by asynchronous handlers
+//! running on the Tokio runtime.
+//!
 //! ## Install
 //!
 //! In `Cargo.toml`, write this crate as a dependency:
@@ -25,12 +29,20 @@
 //! errs = "0.4.0"
 //! ```
 //!
-//! If you want to use error notification, specifies `errs-notify` or `full` in the dependency
-//! features:
+//! If you want to use error notification, specify `errs-notify` or `errs-notify-tokio` in the
+//! dependency features. The `errs-notify` feature is for general use, while the
+//! `errs-notify-tokio` feature is for use with the Tokio runtime.
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.4.0", features = ["errs-notify", "errs-notify-tokio"] }
+//! errs = { version = "0.4.0", features = ["errs-notify"] }
+//! ```
+//!
+//! If you are using Tokio, you should specify `errs-notify-tokio`:
+//!
+//! ```toml
+//! [dependencies]
+//! errs = { version = "0.4.0", features = ["errs-notify-tokio"] }
 //! ```
 //!
 //! ## Usage
@@ -77,7 +89,16 @@
 //! synchronously or asynchronously.
 //! To register error handlers that receive notifications synchronously, use the
 //! `add_sync_err_handler` function.
-//! For asynchronous notifications, use the `add_async_err_handler!` macro.
+//!
+//! For asynchronous notifications, there are two approaches: one for general use and another
+//! specifically for applications using the Tokio runtime.
+//!
+//! For general-purpose asynchronous notifications, use the `add_async_err_handler` function.
+//! This function is available when the `errs-notify` feature is enabled.
+//!
+//! For applications using the Tokio runtime, the `add_tokio_async_err_handler` function should
+//! be used. This function is available when the `errs-notify-tokio` feature is enabled and
+//! ensures that the asynchronous error handling is integrated with the Tokio runtime.
 //!
 //! Error notifications will not occur until the `fix_err_handlers` function is called.
 //! This function locks the current set of error handlers, preventing further additions and
