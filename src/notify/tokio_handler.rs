@@ -282,14 +282,14 @@ mod tests_of_notify {
             assert!(fix_handlers(&HANDLERS).is_ok());
 
             assert!(add_tokio_async_handler(&HANDLERS, async |err, _tm| {
-                std::thread::sleep(tokio::time::Duration::from_millis(10));
+                std::thread::sleep(std::time::Duration::from_millis(10));
                 LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
             })
             .is_err());
             // When rust version is less than 1.85.
             //assert!(
             //    add_tokio_async_handler(&HANDLERS, |err: Arc<Err>, _tm| Box::pin(async move {
-            //        std::thread::sleep(tokio::time::Duration::from_millis(10));
+            //        std::thread::sleep(std::::Duration::from_millis(10));
             //        LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
             //    }))
             //    .is_err()
