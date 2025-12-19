@@ -154,7 +154,7 @@ pub use notify::add_tokio_async_err_handler;
 )]
 pub use notify::{fix_err_handlers, ErrHandlingError, ErrHandlingErrorKind};
 
-use std::{any, cell, error, fmt, marker, ptr};
+use std::{any, cell, error, fmt, marker, ptr, result};
 
 #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
 #[cfg_attr(
@@ -191,7 +191,7 @@ struct DummyReason {}
 #[derive(Debug)]
 struct DummyError {}
 impl fmt::Display for DummyError {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> result::Result<(), fmt::Error> {
         Ok(())
     }
 }
@@ -241,3 +241,38 @@ struct SendSyncNonNull<T: Send + Sync> {
     // Therefore, for good measure, this PhantomData<Cell<T>> field is added.
     _phantom: marker::PhantomData<cell::Cell<T>>,
 }
+
+/// A specialized [`Result`](https://doc.rust-lang.org/std/result/enum.Result.html) type
+/// for `errs` crate, where the error type is [`Err`].
+///
+/// This type is broadly used across the `errs` crate for any operation that may produce an error.
+/// Its primary purpose is to avoid repeatedly writing out [`Err`] directly, making code
+/// more concise.
+///
+/// # Examples
+///
+/// A convenience function that bubbles an `errs::Result` to its caller:
+///
+/// ```
+/// use errs::{Err, Result};
+///
+/// #[derive(Debug)]
+/// enum Reasons {
+///     NotFound,
+///     PermissionDenied,
+/// }
+///
+/// fn might_fail(s: &str) -> Result<String> {
+///     if s == "fail" {
+///         Err(Err::new(Reasons::NotFound))
+///     } else {
+///         Ok(s.to_string())
+///     }
+/// }
+///
+/// fn call_might_fail() -> Result<String> {
+///     let s = might_fail("test")?;
+///     Ok(s)
+/// }
+/// ```
+pub type Result<T> = result::Result<T, Err>;

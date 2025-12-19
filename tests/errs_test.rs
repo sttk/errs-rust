@@ -10,14 +10,14 @@ mod integration_tests_of_err {
         DueToSomeError { path: String },
     }
 
-    fn find_file() -> Result<(), errs::Err> {
+    fn find_file() -> errs::Result<()> {
         let err = errs::Err::new(IoErrs::FileNotFound {
             path: "/aaa/bbb/ccc".to_string(),
         });
         Err(err)
     }
 
-    fn read_file() -> Result<(), errs::Err> {
+    fn read_file() -> errs::Result<()> {
         let err = errs::Err::new(IoErrs::NoPermission {
             path: "/aaa/bbb/ccc".to_string(),
             r#mod: (4, 4, 4),
@@ -25,7 +25,7 @@ mod integration_tests_of_err {
         Err(err)
     }
 
-    fn write_file() -> Result<(), errs::Err> {
+    fn write_file() -> errs::Result<()> {
         let path = "/aaa/bbb/ccc".to_string();
         let source = std::io::Error::new(std::io::ErrorKind::AlreadyExists, path.clone());
         let err = errs::Err::with_source(IoErrs::DueToSomeError { path }, source);
