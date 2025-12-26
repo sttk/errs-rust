@@ -81,6 +81,83 @@
 //! }
 //! ```
 //!
+//! ### Macro-based Registration of Err Handlers
+//!
+//! In addition to function-based handler registration, this crate provides macros for
+//! registering error handlers from a static context (e.g., outside a function body).
+//! These macros utilize the `inventory` crate to collect handlers at compile time,
+//! making them available for the error notification system.
+//!
+//! Registered handlers are activated when the `fix_err_handlers` function is called
+//! or implicitly upon the first `Err` instance creation.
+//!
+//! #### `add_sync_err_handler!`
+//! Statically registers a synchronous error handler.
+//!
+//! ```rust
+//! #[cfg(feature = "errs-notify")]
+//! use errs::{add_sync_err_handler, Err};
+//! #[cfg(feature = "errs-notify")]
+//! use chrono::{DateTime, Utc};
+//!
+//! #[cfg(feature = "errs-notify")]
+//! fn my_static_sync_handler(err: &Err, tm: DateTime<Utc>) {
+//!     println!("[Static Sync] Error at {}: {}", tm, err);
+//! }
+//!
+//! #[cfg(feature = "errs-notify")]
+//! add_sync_err_handler!(my_static_sync_handler);
+//! ```
+//!
+//! #### `add_async_err_handler!`
+//! Statically registers a general-purpose asynchronous error handler.
+//!
+//! ```rust
+//! #[cfg(feature = "errs-notify")]
+//! use errs::{add_async_err_handler, Err};
+//! #[cfg(feature = "errs-notify")]
+//! use chrono::{DateTime, Utc};
+//!
+//! #[cfg(feature = "errs-notify")]
+//! fn my_static_async_handler(err: &Err, tm: DateTime<Utc>) {
+//!     println!("[Static Async] Error at {}: {}", tm, err);
+//! }
+//!
+//! #[cfg(feature = "errs-notify")]
+//! add_async_err_handler!(my_static_async_handler);
+//! ```
+//!
+//! #### `add_tokio_async_err_handler!`
+//! Statically registers a Tokio-based asynchronous error handler.
+//!
+//! ```rust
+//! #[cfg(feature = "errs-notify-tokio")]
+//! use errs::{add_tokio_async_err_handler, Err};
+//! #[cfg(feature = "errs-notify-tokio")]
+//! use chrono::{DateTime, Utc};
+//! use std::sync::Arc;
+//!
+//! #[cfg(feature = "errs-notify-tokio")]
+//! add_tokio_async_err_handler!(async |err: Arc<Err>, tm: DateTime<Utc>| {
+//!     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+//!     println!("[Static Tokio Async] Error at {}: {}", tm, err);
+//! });
+//!
+//! // You can also register a function pointer:
+//! // #[cfg(feature = "errs-notify-tokio")]
+//! // fn my_static_tokio_handler(err: Arc<Err>, tm: DateTime<Utc>) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
+//! //     Box::pin(async move {
+//! //         println!("[Static Tokio Async Fn] Error at {}: {}", tm, err);
+//! //     })
+//! // }
+//! // #[cfg(feature = "errs-notify-tokio")]
+//! // add_tokio_async_err_handler!(my_static_tokio_handler);
+//! ```
+//!
+//! After registering handlers using either functions or macros, ensure you call
+//! `fix_err_handlers()` or allow the first error instantiation to implicitly
+//! fix the handlers.
+//!
 //! ### Notification of Err instantiations
 //!
 //! This crate optionally provides a feature to notify pre-registered error handlers when an `Err`
@@ -141,11 +218,13 @@ mod notify;
 
 #[cfg(feature = "errs-notify")]
 #[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
-pub use notify::{add_async_err_handler, add_sync_err_handler};
+pub use notify::{
+    add_async_err_handler, add_sync_err_handler, AsyncHandlerRegistration, SyncHandlerRegistration,
+};
 
 #[cfg(feature = "errs-notify-tokio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "errs-notify-tokio")))]
-pub use notify::add_tokio_async_err_handler;
+pub use notify::{add_tokio_async_err_handler, TokioAsyncHandlerRegistration};
 
 #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
 #[cfg_attr(

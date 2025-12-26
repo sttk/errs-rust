@@ -7,8 +7,14 @@ mod errors;
 #[cfg(feature = "errs-notify")]
 mod std_handler;
 
+#[cfg(feature = "errs-notify")]
+pub use std_handler::{AsyncHandlerRegistration, SyncHandlerRegistration};
+
 #[cfg(feature = "errs-notify-tokio")]
 mod tokio_handler;
+
+#[cfg(feature = "errs-notify-tokio")]
+pub use tokio_handler::TokioAsyncHandlerRegistration;
 
 use crate::Err;
 use chrono::{DateTime, Utc};

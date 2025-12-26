@@ -10,11 +10,10 @@ use setup_read_cleanup::{graceful::GracefulPhasedCellSync, PhasedErrorKind};
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
-pub type TokioAsyncFn =
+type TokioAsyncFn =
     Box<dyn Fn(Arc<Err>, DateTime<Utc>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
-#[allow(clippy::type_complexity)]
-const NOOP: fn(&mut Vec<TokioAsyncFn>) -> Result<(), ErrHandlingError> = |_| Ok(());
+type TokioAsyncRawFn = fn(Arc<Err>, DateTime<Utc>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
 pub(crate) static HANDLERS: GracefulPhasedCellSync<Vec<TokioAsyncFn>> =
     GracefulPhasedCellSync::new(Vec::new());
@@ -49,7 +48,7 @@ where
 pub(crate) fn fix_handlers(
     handlers: &GracefulPhasedCellSync<Vec<TokioAsyncFn>>,
 ) -> Result<(), ErrHandlingError> {
-    if let Err(e) = handlers.transition_to_read(NOOP) {
+    if let Err(e) = handlers.transition_to_read(register_handlers_by_inventory) {
         match e.kind() {
             PhasedErrorKind::PhaseIsAlreadyRead => Ok(()),
             PhasedErrorKind::InternalDataUnavailable => Err(ErrHandlingError::new(
@@ -73,7 +72,7 @@ pub(crate) fn handle_err(
     err: Arc<Err>,
     tm: DateTime<Utc>,
 ) -> Result<(), ErrHandlingError> {
-    let result = match handlers.transition_to_read(NOOP) {
+    let result = match handlers.transition_to_read(register_handlers_by_inventory) {
         Ok(_) => handlers.read(),
         Err(e) => match e.kind() {
             PhasedErrorKind::PhaseIsAlreadyRead => handlers.read_relaxed(),
@@ -143,6 +142,108 @@ pub(crate) fn handle_err(
             )),
         },
     }
+}
+
+#[doc(hidden)]
+pub struct TokioAsyncHandlerRegistration {
+    handler: TokioAsyncRawFn,
+}
+impl TokioAsyncHandlerRegistration {
+    pub const fn new(handler: TokioAsyncRawFn) -> Self {
+        Self { handler }
+    }
+}
+inventory::collect!(TokioAsyncHandlerRegistration);
+
+/// Statically registers a Tokio-based asynchronous error handler.
+///
+/// This macro provides a way to register an asynchronous error handler from a static context,
+/// designed for integration with the Tokio runtime. It uses the `inventory` crate to collect
+/// handlers at compile time. These handlers are spawned as Tokio tasks when an `Err`
+/// instance is created.
+///
+/// This is the macro-based alternative to the [`add_tokio_async_err_handler`](crate::add_tokio_async_err_handler()) function.
+///
+/// The macro supports two forms:
+/// 1. An `async` block: `add_tokio_async_err_handler!(async |err, tm| { ... });`
+/// 2. A function pointer: `add_tokio_async_err_handler!(my_handler_fn);`
+///
+/// # Note
+/// The handler function must have a signature compatible with
+/// `fn(Arc<Err>, DateTime<Utc>) -> impl Future<Output = ()> + Send`.
+///
+/// # Examples
+///
+/// ### Using an `async` block
+/// ```rust
+/// use errs::{add_tokio_async_err_handler, Err};
+/// use chrono::{DateTime, Utc};
+/// use std::sync::Arc;
+///
+/// // Register the handler statically using an async block.
+/// add_tokio_async_err_handler!(async |err: Arc<Err>, tm: DateTime<Utc>| {
+///     // This will run as a Tokio task.
+///     println!("[Tokio Handler] Error occurred at {}: {}", tm, err);
+/// });
+///
+/// // In your application's initialization:
+/// // errs::fix_err_handlers();
+/// ```
+///
+/// ### Using a function pointer
+/// ```rust
+/// use errs::{add_tokio_async_err_handler, Err};
+/// use chrono::{DateTime, Utc};
+/// use std::sync::Arc;
+/// use std::future::Future;
+/// use std::pin::Pin;
+///
+/// fn my_tokio_handler(err: Arc<Err>, tm: DateTime<Utc>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+///     Box::pin(async move {
+///         println!("[Tokio Handler Fn] Error occurred at {}: {}", tm, err);
+///     })
+/// }
+///
+/// // Register the handler statically using a function pointer.
+/// add_tokio_async_err_handler!(my_tokio_handler);
+///
+/// // In your application's initialization:
+/// // errs::fix_err_handlers();
+/// ```
+#[macro_export]
+macro_rules! add_tokio_async_err_handler {
+    (async | $err:tt , $tm:tt | $body:block ) => {
+        inventory::submit! {
+            $crate::TokioAsyncHandlerRegistration::new(|$err: std::sync::Arc<$crate::Err>, $tm: chrono::DateTime<chrono::Utc>| {
+                std::boxed::Box::pin(async move { $body })
+            })
+        }
+    };
+
+    (async | $err:tt : $errty:ty, $tm:tt : $tmty:ty | $body:block ) => {
+        inventory::submit! {
+            $crate::TokioAsyncHandlerRegistration::new(|$err: $errty, $tm: $tmty| {
+                std::boxed::Box::pin(async move { $body })
+            })
+        }
+    };
+
+    ($handler:expr) => {
+        inventory::submit! {
+            $crate::TokioAsyncHandlerRegistration::new($handler)
+        }
+    };
+}
+
+fn register_handlers_by_inventory(v: &mut Vec<TokioAsyncFn>) -> Result<(), ErrHandlingError> {
+    let mut vec: Vec<TokioAsyncFn> = inventory::iter::<TokioAsyncHandlerRegistration>
+        .into_iter()
+        .map(|reg| Box::new(reg.handler) as TokioAsyncFn)
+        .collect();
+    vec.append(&mut *v);
+    *v = vec;
+
+    Ok(())
 }
 
 #[cfg(test)]

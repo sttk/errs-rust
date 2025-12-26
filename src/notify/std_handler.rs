@@ -13,10 +13,6 @@ use std::{sync::Arc, thread};
 type SyncBoxedFn = Box<dyn Fn(&Err, DateTime<Utc>) + Send + Sync + 'static>;
 type AsyncArcFn = Arc<dyn Fn(&Err, DateTime<Utc>) + Send + Sync + 'static>;
 
-#[allow(clippy::type_complexity)]
-const NOOP: fn(&mut (Vec<SyncBoxedFn>, Vec<AsyncArcFn>)) -> Result<(), ErrHandlingError> =
-    |_| Ok(());
-
 pub(crate) static HANDLERS: GracefulPhasedCellSync<(Vec<SyncBoxedFn>, Vec<AsyncArcFn>)> =
     GracefulPhasedCellSync::new((Vec::new(), Vec::new()));
 
@@ -75,7 +71,7 @@ where
 pub(crate) fn fix_handlers(
     handlers: &GracefulPhasedCellSync<(Vec<SyncBoxedFn>, Vec<AsyncArcFn>)>,
 ) -> Result<(), ErrHandlingError> {
-    if let Err(e) = handlers.transition_to_read(NOOP) {
+    if let Err(e) = handlers.transition_to_read(register_handlers_by_inventory) {
         match e.kind() {
             PhasedErrorKind::PhaseIsAlreadyRead => Ok(()),
             PhasedErrorKind::InternalDataUnavailable => Err(ErrHandlingError::new(
@@ -99,7 +95,7 @@ pub(crate) fn handle_err(
     err: Arc<Err>,
     tm: DateTime<Utc>,
 ) -> Result<(), ErrHandlingError> {
-    let result = match handlers.transition_to_read(NOOP) {
+    let result = match handlers.transition_to_read(register_handlers_by_inventory) {
         Ok(_) => handlers.read(),
         Err(e) => match e.kind() {
             PhasedErrorKind::PhaseIsAlreadyRead => handlers.read_relaxed(),
@@ -174,6 +170,123 @@ pub(crate) fn handle_err(
             )),
         },
     }
+}
+
+#[doc(hidden)]
+pub struct SyncHandlerRegistration {
+    handler: fn(&Err, DateTime<Utc>),
+}
+impl SyncHandlerRegistration {
+    pub const fn new(handler: fn(&Err, DateTime<Utc>)) -> Self {
+        Self { handler }
+    }
+}
+inventory::collect!(SyncHandlerRegistration);
+
+#[doc(hidden)]
+pub struct AsyncHandlerRegistration {
+    handler: fn(&Err, DateTime<Utc>),
+}
+impl AsyncHandlerRegistration {
+    pub const fn new(handler: fn(&Err, DateTime<Utc>)) -> Self {
+        Self { handler }
+    }
+}
+inventory::collect!(AsyncHandlerRegistration);
+
+/// Statically registers a synchronous error handler.
+///
+/// This macro provides a way to register an error handler from a static context, such as
+/// outside a function body. It uses the `inventory` crate to collect handlers at compile
+/// time, which are then added when `fix_err_handlers` is called or the first error
+/// notification occurs.
+///
+/// This is the macro-based alternative to the [`add_sync_err_handler`](crate::add_sync_err_handler()) function.
+///
+/// # Note
+/// The handler function must be a function pointer `fn(&Err, DateTime<Utc>)`.
+/// Closures are not supported in this macro.
+///
+/// # Example
+/// ```rust
+/// use errs::{add_sync_err_handler, Err};
+/// use chrono::{DateTime, Utc};
+///
+/// fn my_sync_handler(err: &Err, tm: DateTime<Utc>) {
+///     // In a real scenario, you might log the error to a file or service.
+///     println!("[Sync Handler] Error occurred at {}: {}", tm, err);
+/// }
+///
+/// // Register the handler statically.
+/// add_sync_err_handler!(my_sync_handler);
+///
+/// // In your application's initialization:
+/// // errs::fix_err_handlers();
+/// ```
+#[macro_export]
+macro_rules! add_sync_err_handler {
+    ($handler:expr) => {
+        inventory::submit! {
+          $crate::SyncHandlerRegistration::new($handler)
+        }
+    };
+}
+
+/// Statically registers an asynchronous error handler.
+///
+/// This macro provides a way to register an asynchronous error handler from a static context.
+/// It leverages the `inventory` crate to collect handlers at compile time. These handlers
+/// are executed in a separate thread when an `Err` instance is created.
+///
+/// This is the macro-based alternative to the [`add_async_err_handler`](crate::add_async_err_handler()) function.
+///
+/// # Note
+/// The handler function must be a function pointer `fn(&Err, DateTime<Utc>)`.
+/// Closures are not supported in this macro.
+///
+/// # Example
+/// ```rust
+/// use errs::{add_async_err_handler, Err};
+/// use chrono::{DateTime, Utc};
+///
+/// fn my_async_handler(err: &Err, tm: DateTime<Utc>) {
+///     // This will run in a separate thread.
+///     println!("[Async Handler] Error occurred at {}: {}", tm, err);
+/// }
+///
+/// // Register the handler statically.
+/// add_async_err_handler!(my_async_handler);
+///
+/// // In your application's initialization:
+/// // errs::fix_err_handlers();
+/// ```
+#[macro_export]
+macro_rules! add_async_err_handler {
+    ($handler:expr) => {
+        inventory::submit! {
+          $crate::AsyncHandlerRegistration::new($handler)
+        }
+    };
+}
+
+fn register_handlers_by_inventory(
+    vv: &mut (Vec<SyncBoxedFn>, Vec<AsyncArcFn>),
+) -> Result<(), ErrHandlingError> {
+    let mut vec: Vec<SyncBoxedFn> = inventory::iter::<SyncHandlerRegistration>
+        .into_iter()
+        .map(|reg| Box::new(reg.handler) as SyncBoxedFn)
+        .collect();
+    vec.append(&mut vv.0);
+    vv.0 = vec;
+
+    let mut vec: Vec<AsyncArcFn> = inventory::iter::<AsyncHandlerRegistration>
+        .into_iter()
+        .map(|reg| Arc::new(reg.handler) as AsyncArcFn)
+        .collect();
+    vec.append(&mut vv.1);
+    vv.1 = vec;
+
+    Ok(())
 }
 
 #[cfg(test)]
