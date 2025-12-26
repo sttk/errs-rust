@@ -66,7 +66,7 @@ match err.reason::<Reasons>() {
 }
 ```
 
-### Function-based Registration
+### Function-based Error Handler Registration
 
 This crate optionally provides a feature to notify pre-registered error handlers when an `Err`
 is instantiated.
@@ -105,7 +105,7 @@ errs::add_tokio_async_err_handler(async |err, tm| {
 errs::fix_err_handlers();
 ```
 
-### Macro-based Registration
+### Macro-based Error Handler Registration
 
 Alternatively, you can register handlers from a static context (outside a function body)
 using macros. These are useful for setting up global handlers that are compiled into your
