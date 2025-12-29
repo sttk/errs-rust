@@ -236,12 +236,11 @@ macro_rules! add_tokio_async_err_handler {
 }
 
 fn register_handlers_by_inventory(v: &mut Vec<TokioAsyncFn>) -> Result<(), ErrHandlingError> {
-    let mut vec: Vec<TokioAsyncFn> = inventory::iter::<TokioAsyncHandlerRegistration>
+    let vec: Vec<TokioAsyncFn> = inventory::iter::<TokioAsyncHandlerRegistration>
         .into_iter()
         .map(|reg| Box::new(reg.handler) as TokioAsyncFn)
         .collect();
-    vec.append(&mut *v);
-    *v = vec;
+    v.splice(0..0, vec);
 
     Ok(())
 }
