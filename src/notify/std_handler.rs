@@ -272,19 +272,17 @@ macro_rules! add_async_err_handler {
 fn register_handlers_by_inventory(
     vv: &mut (Vec<SyncBoxedFn>, Vec<AsyncArcFn>),
 ) -> Result<(), ErrHandlingError> {
-    let mut vec: Vec<SyncBoxedFn> = inventory::iter::<SyncHandlerRegistration>
+    let vec: Vec<SyncBoxedFn> = inventory::iter::<SyncHandlerRegistration>
         .into_iter()
         .map(|reg| Box::new(reg.handler) as SyncBoxedFn)
         .collect();
-    vec.append(&mut vv.0);
-    vv.0 = vec;
+    vv.0.splice(0..0, vec);
 
-    let mut vec: Vec<AsyncArcFn> = inventory::iter::<AsyncHandlerRegistration>
+    let vec: Vec<AsyncArcFn> = inventory::iter::<AsyncHandlerRegistration>
         .into_iter()
         .map(|reg| Arc::new(reg.handler) as AsyncArcFn)
         .collect();
-    vec.append(&mut vv.1);
-    vv.1 = vec;
+    vv.1.splice(0..0, vec);
 
     Ok(())
 }
