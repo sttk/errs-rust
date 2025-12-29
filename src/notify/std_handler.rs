@@ -305,25 +305,25 @@ mod tests_of_notify {
         static HANDLERS: GracefulPhasedCellSync<(Vec<SyncBoxedFn>, Vec<AsyncArcFn>)> =
             GracefulPhasedCellSync::new((Vec::new(), Vec::new()));
 
-        static LOGGERS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+        static LOGGER: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
         const LINE: u32 = line!();
 
         #[test]
         fn add_and_fix_and_notify() {
             assert!(add_sync_handler(&HANDLERS, |err, _tm| {
-                LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             })
             .is_ok());
             assert!(add_sync_handler(&HANDLERS, |err, _tm| {
-                LOGGERS.lock().unwrap().push(format!("2: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("2: err={err:?}"));
             })
             .is_ok());
 
             assert!(fix_handlers(&HANDLERS).is_ok());
 
             assert!(add_sync_handler(&HANDLERS, |err, _tm| {
-                LOGGERS.lock().unwrap().push(format!("3: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("3: err={err:?}"));
             })
             .is_err());
 
@@ -332,14 +332,14 @@ mod tests_of_notify {
 
             #[cfg(unix)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
                 assert_eq!(vec[0], format!("1: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/std_handler.rs, line = {} }}", LINE + 20));
                 assert_eq!(vec[1], format!("2: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/std_handler.rs, line = {} }}", LINE + 20));
             }
             #[cfg(windows)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
                 assert_eq!(vec[0], format!("1: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\std_handler.rs, line = {} }}", LINE + 20));
                 assert_eq!(vec[1], format!("2: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\std_handler.rs, line = {} }}", LINE + 20));
@@ -354,7 +354,7 @@ mod tests_of_notify {
         static HANDLERS: GracefulPhasedCellSync<(Vec<SyncBoxedFn>, Vec<AsyncArcFn>)> =
             GracefulPhasedCellSync::new((Vec::new(), Vec::new()));
 
-        static LOGGERS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+        static LOGGER: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
         const LINE: u32 = line!();
 
@@ -362,12 +362,12 @@ mod tests_of_notify {
         fn add_and_fix_and_notify() {
             assert!(add_async_handler(&HANDLERS, |err, _tm| {
                 thread::sleep(std::time::Duration::from_millis(50));
-                LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             })
             .is_ok());
             assert!(add_async_handler(&HANDLERS, |err, _tm| {
                 thread::sleep(std::time::Duration::from_millis(10));
-                LOGGERS.lock().unwrap().push(format!("2: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("2: err={err:?}"));
             })
             .is_ok());
 
@@ -375,7 +375,7 @@ mod tests_of_notify {
 
             assert!(add_async_handler(&HANDLERS, |err, _tm| {
                 thread::sleep(std::time::Duration::from_millis(10));
-                LOGGERS.lock().unwrap().push(format!("3: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("3: err={err:?}"));
             })
             .is_err());
 
@@ -383,7 +383,7 @@ mod tests_of_notify {
             assert!(handle_err(&HANDLERS, err.into(), Utc::now()).is_ok());
 
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 0);
             }
 
@@ -391,14 +391,14 @@ mod tests_of_notify {
 
             #[cfg(unix)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
                 assert_eq!(vec[0], format!("2: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/std_handler.rs, line = {} }}", LINE + 23));
                 assert_eq!(vec[1], format!("1: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/std_handler.rs, line = {} }}", LINE + 23));
             }
             #[cfg(windows)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
                 assert_eq!(vec[0], format!("2: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\std_handler.rs, line = {} }}", LINE + 23));
                 assert_eq!(vec[1], format!("1: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\std_handler.rs, line = {} }}", LINE + 23));
@@ -415,7 +415,7 @@ mod tests_of_notify {
         static HANDLERS: GracefulPhasedCellSync<(Vec<SyncBoxedFn>, Vec<AsyncArcFn>)> =
             GracefulPhasedCellSync::new((Vec::new(), Vec::new()));
 
-        static LOGGERS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+        static LOGGER: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
         const LINE: u32 = line!();
 
@@ -423,18 +423,12 @@ mod tests_of_notify {
         async fn add_and_fix_and_notify() {
             assert!(add_async_handler(&HANDLERS, |err, _tm| {
                 thread::sleep(std::time::Duration::from_millis(50)); // intentionally block
-                LOGGERS
-                    .lock()
-                    .unwrap()
-                    .push(format!("tokio-1: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("tokio-1: err={err:?}"));
             })
             .is_ok());
             assert!(add_async_handler(&HANDLERS, |err, _tm| {
                 thread::sleep(std::time::Duration::from_millis(10)); // intentionally block
-                LOGGERS
-                    .lock()
-                    .unwrap()
-                    .push(format!("tokio-2: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("tokio-2: err={err:?}"));
             })
             .is_ok());
 
@@ -442,7 +436,7 @@ mod tests_of_notify {
 
             assert!(add_async_handler(&HANDLERS, |err, _tm| {
                 thread::sleep(std::time::Duration::from_millis(10));
-                LOGGERS.lock().unwrap().push(format!("3: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("3: err={err:?}"));
             })
             .is_err());
 
@@ -450,7 +444,7 @@ mod tests_of_notify {
             assert!(handle_err(&HANDLERS, Arc::new(err), Utc::now()).is_ok());
 
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 0);
             }
 
@@ -458,17 +452,17 @@ mod tests_of_notify {
 
             #[cfg(unix)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
-                assert_eq!(vec[0], format!("tokio-2: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/std_handler.rs, line = {} }}", LINE + 29));
-                assert_eq!(vec[1], format!("tokio-1: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/std_handler.rs, line = {} }}", LINE + 29));
+                assert_eq!(vec[0], format!("tokio-2: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/std_handler.rs, line = {} }}", LINE + 23));
+                assert_eq!(vec[1], format!("tokio-1: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/std_handler.rs, line = {} }}", LINE + 23));
             }
             #[cfg(windows)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
-                assert_eq!(vec[0], format!("tokio-2: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\std_handler.rs, line = {} }}", LINE + 29));
-                assert_eq!(vec[1], format!("tokio-1: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\std_handler.rs, line = {} }}", LINE + 29));
+                assert_eq!(vec[0], format!("tokio-2: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\std_handler.rs, line = {} }}", LINE + 23));
+                assert_eq!(vec[1], format!("tokio-1: err=errs::Err {{ reason = errs::notify::std_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\std_handler.rs, line = {} }}", LINE + 23));
             }
         }
     }
@@ -480,7 +474,7 @@ mod tests_of_notify {
         static HANDLERS: GracefulPhasedCellSync<(Vec<SyncBoxedFn>, Vec<AsyncArcFn>)> =
             GracefulPhasedCellSync::new((Vec::new(), Vec::new()));
 
-        static LOGGERS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+        static LOGGER: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
         #[test]
         fn no_handlers_registered_should_not_panic() {
@@ -490,7 +484,7 @@ mod tests_of_notify {
             let result = handle_err(&HANDLERS, Arc::new(err), Utc::now());
 
             assert!(result.is_ok());
-            assert!(LOGGERS.lock().unwrap().is_empty());
+            assert!(LOGGER.lock().unwrap().is_empty());
         }
     }
 }

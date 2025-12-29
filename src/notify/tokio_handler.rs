@@ -262,7 +262,7 @@ mod tests_of_notify {
         static HANDLERS: GracefulPhasedCellSync<Vec<TokioAsyncFn>> =
             GracefulPhasedCellSync::new(Vec::new());
 
-        static LOGGERS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+        static LOGGER: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
         const LINE: u32 = line!();
 
@@ -270,28 +270,28 @@ mod tests_of_notify {
         async fn add_and_fix_and_notify() {
             assert!(add_tokio_async_handler(&HANDLERS, async |err, _tm| {
                 tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-                LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             })
             .is_ok());
             // When rust version is less than 1.85.
             //assert!(
             //    add_tokio_async_handler(&HANDLERS, |err: Arc<Err>, _tm| Box::pin(async move {
             //        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-            //        LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+            //        LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             //    }))
             //    .is_ok()
             //);
 
             assert!(add_tokio_async_handler(&HANDLERS, async |err, _tm| {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                LOGGERS.lock().unwrap().push(format!("2: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("2: err={err:?}"));
             })
             .is_ok());
             // When rust version is less than 1.85.
             //assert!(
             //    add_tokio_async_handler(&HANDLERS, |err: Arc<Err>, _tm| Box::pin(async move {
             //        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-            //        LOGGERS.lock().unwrap().push(format!("2: err={err:?}"));
+            //        LOGGER.lock().unwrap().push(format!("2: err={err:?}"));
             //    }))
             //    .is_ok()
             //);
@@ -300,14 +300,14 @@ mod tests_of_notify {
 
             assert!(add_tokio_async_handler(&HANDLERS, async |err, _tm| {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             })
             .is_err());
             // When rust version is less than 1.85.
             //assert!(
             //    add_tokio_async_handler(&HANDLERS, |err: Arc<Err>, _tm| Box::pin(async move {
             //        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-            //        LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+            //        LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             //    }))
             //    .is_err()
             //);
@@ -316,7 +316,7 @@ mod tests_of_notify {
             assert!(handle_err(&HANDLERS, err.into(), Utc::now()).is_ok());
 
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 0);
             }
 
@@ -324,14 +324,14 @@ mod tests_of_notify {
 
             #[cfg(unix)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
                 assert_eq!(vec[0], format!("2: err=errs::Err {{ reason = errs::notify::tokio_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/tokio_handler.rs, line = {} }}", LINE + 48));
                 assert_eq!(vec[1], format!("1: err=errs::Err {{ reason = errs::notify::tokio_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/tokio_handler.rs, line = {} }}", LINE + 48));
             }
             #[cfg(windows)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
                 assert_eq!(vec[0], format!("2: err=errs::Err {{ reason = errs::notify::tokio_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\tokio_handler.rs, line = {} }}", LINE + 48));
                 assert_eq!(vec[1], format!("1: err=errs::Err {{ reason = errs::notify::tokio_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\tokio_handler.rs, line = {} }}", LINE + 48));
@@ -346,7 +346,7 @@ mod tests_of_notify {
         static HANDLERS: GracefulPhasedCellSync<Vec<TokioAsyncFn>> =
             GracefulPhasedCellSync::new(Vec::new());
 
-        static LOGGERS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+        static LOGGER: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
         const LINE: u32 = line!();
 
@@ -354,28 +354,28 @@ mod tests_of_notify {
         fn add_and_fix_and_notify() {
             assert!(add_tokio_async_handler(&HANDLERS, async |err, _tm| {
                 tokio::time::sleep(tokio::time::Duration::from_millis(90)).await;
-                LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             })
             .is_ok());
             // When rust version is less than 1.85.
             //assert!(
             //    add_tokio_async_handler(&HANDLERS, |err: Arc<Err>, _tm| Box::pin(async move {
             //        tokio::time::sleep(tokio::time::Duration::from_millis(90)).await;
-            //        LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+            //        LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             //    }))
             //    .is_ok()
             //);
 
             assert!(add_tokio_async_handler(&HANDLERS, async |err, _tm| {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                LOGGERS.lock().unwrap().push(format!("2: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("2: err={err:?}"));
             })
             .is_ok());
             // When rust version is less than 1.85.
             //assert!(
             //    add_tokio_async_handler(&HANDLERS, |err: Arc<Err>, _tm| Box::pin(async move {
             //        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-            //        LOGGERS.lock().unwrap().push(format!("2: err={err:?}"));
+            //        LOGGER.lock().unwrap().push(format!("2: err={err:?}"));
             //    }))
             //    .is_ok()
             //);
@@ -384,14 +384,14 @@ mod tests_of_notify {
 
             assert!(add_tokio_async_handler(&HANDLERS, async |err, _tm| {
                 std::thread::sleep(std::time::Duration::from_millis(10));
-                LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+                LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             })
             .is_err());
             // When rust version is less than 1.85.
             //assert!(
             //    add_tokio_async_handler(&HANDLERS, |err: Arc<Err>, _tm| Box::pin(async move {
             //        std::thread::sleep(std::::Duration::from_millis(10));
-            //        LOGGERS.lock().unwrap().push(format!("1: err={err:?}"));
+            //        LOGGER.lock().unwrap().push(format!("1: err={err:?}"));
             //    }))
             //    .is_err()
             //);
@@ -400,7 +400,7 @@ mod tests_of_notify {
             assert!(handle_err(&HANDLERS, err.into(), Utc::now()).is_ok());
 
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 0);
             }
 
@@ -408,14 +408,14 @@ mod tests_of_notify {
 
             #[cfg(unix)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
                 assert_eq!(vec[0], format!("2: err=errs::Err {{ reason = errs::notify::tokio_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/tokio_handler.rs, line = {} }}", LINE + 48));
                 assert_eq!(vec[1], format!("1: err=errs::Err {{ reason = errs::notify::tokio_handler::tests_of_notify::Errors FailToDoSomething, file = src/notify/tokio_handler.rs, line = {} }}", LINE + 48));
             }
             #[cfg(windows)]
             {
-                let vec = LOGGERS.lock().unwrap();
+                let vec = LOGGER.lock().unwrap();
                 assert_eq!(vec.len(), 2);
                 assert_eq!(vec[0], format!("2: err=errs::Err {{ reason = errs::notify::tokio_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\tokio_handler.rs, line = {} }}", LINE + 48));
                 assert_eq!(vec[1], format!("1: err=errs::Err {{ reason = errs::notify::tokio_handler::tests_of_notify::Errors FailToDoSomething, file = src\\notify\\tokio_handler.rs, line = {} }}", LINE + 48));
