@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Takayuki Sato. All Rights Reserved.
+// Copyright (C) 2025-2026 Takayuki Sato. All Rights Reserved.
 // This program is free software under MIT License.
 // See the file LICENSE in this distribution for more details.
 
@@ -26,7 +26,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! errs = "0.7.1"
+//! errs = "0.8.0"
 //! ```
 //!
 //! If you want to use error notification, specify `notify` or `notify-tokio` in the
@@ -35,14 +35,14 @@
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.7.1", features = ["notify"] }
+//! errs = { version = "0.8.0", features = ["notify"] }
 //! ```
 //!
 //! If you are using Tokio, you should specify `notify-tokio`:
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.7.1", features = ["notify-tokio"] }
+//! errs = { version = "0.8.0", features = ["notify-tokio"] }
 //! ```
 //!
 //! ## Usage
