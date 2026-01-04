@@ -15,19 +15,19 @@ In `Cargo.toml`, write this crate as a dependency:
 errs = "0.7.1"
 ```
 
-If you want to use error notification, specify the `errs-notify` or `errs-notify-tokio` in the dependency features.
-The `errs-notify` feature is for general use, while the `errs-notify-tokio` feature is for use with the Tokio runtime.
+If you want to use error notification, specify the `notify` or `notify-tokio` in the dependency features.
+The `notify` feature is for general use, while the `notify-tokio` feature is for use with the Tokio runtime.
 
 ```toml
 [dependencies]
-errs = { version = "0.7.1", features = ["errs-notify"] }
+errs = { version = "0.7.1", features = ["notify"] }
 ```
 
-If you are using Tokio, you should specify `errs-notify-tokio`:
+If you are using Tokio, you should specify `notify-tokio`:
 
 ```toml
 [dependencies]
-errs = { version = "0.7.1", features = ["errs-notify-tokio"] }
+errs = { version = "0.7.1", features = ["notify-tokio"] }
 ```
 
 ## Usage
@@ -85,23 +85,23 @@ enabling notification processing.
 ```rust
 // In your main function or initialization code:
 
-#[cfg(feature = "errs-notify")]
+#[cfg(feature = "notify")]
 errs::add_sync_err_handler(|err, tm| {
     println!("[Sync] {}:{}:{} - {}", tm, err.file(), err.line(), err);
 });
 
-#[cfg(feature = "errs-notify")]
+#[cfg(feature = "notify")]
 errs::add_async_err_handler(|err, tm| {
     println!("[Async] {}:{}:{} - {}", tm, err.file(), err.line(), err);
 });
 
-#[cfg(feature = "errs-notify-tokio")]
+#[cfg(feature = "notify-tokio")]
 errs::add_tokio_async_err_handler(async |err, tm| {
     println!("[Tokio Async] {}:{}:{} - {}", tm, err.file(), err.line(), err);
 });
 
 // Fix the handlers to start receiving notifications.
-#[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
+#[cfg(any(feature = "notify", feature = "notify-tokio"))]
 errs::fix_err_handlers();
 ```
 
@@ -118,9 +118,9 @@ program.
 These macros require function pointers, not closures.
 
 ```rust
-#[cfg(feature = "errs-notify")]
+#[cfg(feature = "notify")]
 use errs::{add_async_err_handler, add_sync_err_handler};
-#[cfg(feature = "errs-notify-tokio")]
+#[cfg(feature = "notify-tokio")]
 use errs::{add_tokio_async_err_handler};
 use errs::Err;
 use chrono::{DateTime, Utc};
@@ -130,18 +130,18 @@ use std::sync::Arc;
 fn my_sync_handler(err: &Err, tm: DateTime<Utc>) {
     println!("[Static Sync] Error at {}: {}", tm, err);
 }
-#[cfg(feature = "errs-notify")]
+#[cfg(feature = "notify")]
 add_sync_err_handler!(my_sync_handler);
 
 // Define a static asynchronous handler
 fn my_async_handler(err: &Err, tm: DateTime<Utc>) {
     println!("[Static Async] Error at {}: {}", tm, err);
 }
-#[cfg(feature = "errs-notify")]
+#[cfg(feature = "notify")]
 add_async_err_handler!(my_async_handler);
 
 // Define a static Tokio-based asynchronous handler
-#[cfg(feature = "errs-notify-tokio")]
+#[cfg(feature = "notify-tokio")]
 add_tokio_async_err_handler!(async |err: Arc<Err>, tm: DateTime<Utc>| {
     println!("[Static Tokio Async] Error at {}: {}", tm, err);
 });

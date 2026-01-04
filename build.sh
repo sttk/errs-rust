@@ -32,12 +32,12 @@ test() {
   cargo test --features default -- --show-output
   errcheck $?
 
-  echo "### features: errs-notify"
-  cargo test --features errs-notify -- --show-output
+  echo "### features: notify"
+  cargo test --features notify -- --show-output
   errcheck $?
 
-  echo "### features: errs-notify-tokio"
-  cargo test --features errs-notify-tokio -- --show-output
+  echo "### features: notify-tokio"
+  cargo test --features notify-tokio -- --show-output
   errcheck $?
 
   echo "### features: full"

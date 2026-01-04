@@ -1,4 +1,4 @@
-#[cfg(feature = "errs-notify-tokio")]
+#[cfg(feature = "notify-tokio")]
 #[cfg(test)]
 mod tests_of_notification {
     use std::sync::{LazyLock, Mutex};
@@ -6,11 +6,11 @@ mod tests_of_notification {
     static LOGGER: LazyLock<Mutex<(Vec<String>, Vec<String>)>> =
         LazyLock::new(|| Mutex::new((Vec::new(), Vec::new())));
 
-    #[cfg(feature = "errs-notify")]
+    #[cfg(feature = "notify")]
     errs::add_sync_err_handler!(|err, _dttm| {
         LOGGER.lock().unwrap().0.push(format!("[sync] {err:?}"));
     });
-    #[cfg(feature = "errs-notify")]
+    #[cfg(feature = "notify")]
     errs::add_async_err_handler!(|err, _dttm| {
         LOGGER.lock().unwrap().0.push(format!("[async] {err:?}"));
     });
@@ -29,7 +29,7 @@ mod tests_of_notification {
     async fn test() {
         let _err = errs::Err::new(Reasons::FailToDoSomething);
 
-        #[cfg(feature = "errs-notify")]
+        #[cfg(feature = "notify")]
         {
             let logs = &LOGGER.lock().unwrap().0;
             assert_eq!(logs.len(), 1);
@@ -42,7 +42,7 @@ mod tests_of_notification {
                 assert_eq!(logs[0], format!("[sync] errs::Err {{ reason = global_handler_registeration_on_tokio_rt_test::tests_of_notification::Reasons FailToDoSomething, file = tests\\global_handler_registeration_on_tokio_rt_test.rs, line = {} }}", BASE_LINE + 4));
             }
         }
-        #[cfg(not(feature = "errs-notify"))]
+        #[cfg(not(feature = "notify"))]
         {
             let logs = &LOGGER.lock().unwrap().0;
             assert_eq!(logs.len(), 0);
@@ -55,7 +55,7 @@ mod tests_of_notification {
 
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        #[cfg(feature = "errs-notify")]
+        #[cfg(feature = "notify")]
         {
             let logs = &LOGGER.lock().unwrap().0;
             assert_eq!(logs.len(), 2);
@@ -70,7 +70,7 @@ mod tests_of_notification {
                 assert_eq!(logs[1], format!("[async] errs::Err {{ reason = global_handler_registeration_on_tokio_rt_test::tests_of_notification::Reasons FailToDoSomething, file = tests\\global_handler_registeration_on_tokio_rt_test.rs, line = {} }}", BASE_LINE + 4));
             }
         }
-        #[cfg(not(feature = "errs-notify"))]
+        #[cfg(not(feature = "notify"))]
         {
             let logs = &LOGGER.lock().unwrap().0;
             assert_eq!(logs.len(), 0);

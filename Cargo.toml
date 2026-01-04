@@ -15,17 +15,17 @@ categories = ["rust-patterns"]
 [dependencies]
 chrono = { version = "0.4", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"], optional = true }
-setup_read_cleanup = { "version" = "0.5", optional = true }
+setup_read_cleanup = { version = "0.6", optional = true }
 inventory = { version = "0.3", optional = true }
 
 [dev-dependencies]
 trybuild = "1"
 
 [features]
-errs-notify = ["setup_read_cleanup/setup_read_cleanup-graceful", "dep:chrono", "dep:inventory"]
-errs-notify-tokio = ["setup_read_cleanup/setup_read_cleanup-graceful", "dep:chrono", "dep:tokio", "dep:inventory"]
+notify = ["setup_read_cleanup/graceful", "dep:chrono", "dep:inventory"]
+notify-tokio = ["setup_read_cleanup/graceful", "dep:chrono", "dep:tokio", "dep:inventory"]
 default = []
-full = ["errs-notify", "errs-notify-tokio"]
+full = ["notify", "notify-tokio"]
 
 [package.metadata.docs.rs]
 all-features = true

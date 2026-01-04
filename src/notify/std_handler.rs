@@ -122,7 +122,7 @@ pub(crate) fn handle_err(
     match result {
         Ok(vv) => {
             let err_clone = Arc::clone(&err);
-            #[cfg(not(feature = "errs-notify-tokio"))]
+            #[cfg(not(feature = "notify-tokio"))]
             {
                 thread::spawn(move || {
                     for handle in vv.1.iter() {
@@ -132,7 +132,7 @@ pub(crate) fn handle_err(
                     }
                 });
             }
-            #[cfg(feature = "errs-notify-tokio")]
+            #[cfg(feature = "notify-tokio")]
             {
                 if let Ok(rt_handle) = tokio::runtime::Handle::try_current() {
                     thread::spawn(move || {
@@ -404,7 +404,7 @@ mod tests_of_notify {
         }
     }
 
-    #[cfg(feature = "errs-notify-tokio")]
+    #[cfg(feature = "notify-tokio")]
     mod tests_of_async_err_handling_on_tokio {
         use super::*;
         use std::sync::{LazyLock, Mutex};

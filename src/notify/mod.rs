@@ -4,16 +4,16 @@
 
 mod errors;
 
-#[cfg(feature = "errs-notify")]
+#[cfg(feature = "notify")]
 mod std_handler;
 
-#[cfg(feature = "errs-notify")]
+#[cfg(feature = "notify")]
 pub use std_handler::{AsyncHandlerRegistration, SyncHandlerRegistration};
 
-#[cfg(feature = "errs-notify-tokio")]
+#[cfg(feature = "notify-tokio")]
 mod tokio_handler;
 
-#[cfg(feature = "errs-notify-tokio")]
+#[cfg(feature = "notify-tokio")]
 pub use tokio_handler::TokioAsyncHandlerRegistration;
 
 use crate::Err;
@@ -21,7 +21,7 @@ use chrono::{DateTime, Utc};
 
 use std::sync;
 
-#[cfg(feature = "errs-notify-tokio")]
+#[cfg(feature = "notify-tokio")]
 use std::future::Future;
 
 /// Represents the specific kind of error that can occur within the error handling
@@ -56,8 +56,8 @@ pub struct ErrHandlingError {
 /// - `Ok(())` if the handler was successfully registered.
 /// - `Err(ErrHandlingError)` if an error occurred during registration (e.g., trying to register
 ///   after the handlers have been fixed).
-#[cfg(feature = "errs-notify")]
-#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
+#[cfg(feature = "notify")]
+#[cfg_attr(docsrs, doc(cfg(feature = "notify")))]
 pub fn add_async_err_handler<F>(handler: F) -> Result<(), ErrHandlingError>
 where
     F: Fn(&Err, DateTime<Utc>) + Send + Sync + 'static,
@@ -79,8 +79,8 @@ where
 /// - `Ok(())` if the handler was successfully registered.
 /// - `Err(ErrHandlingError)` if an error occurred during registration (e.g., trying to register
 ///   after the handlers have been fixed).
-#[cfg(feature = "errs-notify")]
-#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
+#[cfg(feature = "notify")]
+#[cfg_attr(docsrs, doc(cfg(feature = "notify")))]
 pub fn add_sync_err_handler<F>(handler: F) -> Result<(), ErrHandlingError>
 where
     F: Fn(&Err, DateTime<Utc>) + Send + Sync + 'static,
@@ -106,8 +106,8 @@ where
 /// # Returns
 /// - `Ok(())` if the handler was successfully registered.
 /// - `Err(ErrHandlingError)` if an error occurred during registration.
-#[cfg(feature = "errs-notify-tokio")]
-#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify-tokio")))]
+#[cfg(feature = "notify-tokio")]
+#[cfg_attr(docsrs, doc(cfg(feature = "notify-tokio")))]
 pub fn add_tokio_async_err_handler<F, Fut>(handler: F) -> Result<(), ErrHandlingError>
 where
     F: Fn(sync::Arc<Err>, DateTime<Utc>) -> Fut + Send + Sync + 'static,
@@ -128,15 +128,15 @@ where
 /// - `Ok(())` if the handlers were successfully fixed or were already fixed.
 /// - `Err(ErrHandlingError)` if an error occurred during the fixing process.
 pub fn fix_err_handlers() -> Result<(), ErrHandlingError> {
-    #[cfg(feature = "errs-notify")]
+    #[cfg(feature = "notify")]
     let result_std = std_handler::fix_handlers(&std_handler::HANDLERS);
 
-    #[cfg(feature = "errs-notify-tokio")]
+    #[cfg(feature = "notify-tokio")]
     let result_tokio = tokio_handler::fix_handlers(&tokio_handler::HANDLERS);
 
-    #[cfg(feature = "errs-notify")]
+    #[cfg(feature = "notify")]
     result_std?;
-    #[cfg(feature = "errs-notify-tokio")]
+    #[cfg(feature = "notify-tokio")]
     result_tokio?;
 
     Ok(())
@@ -146,16 +146,16 @@ pub(crate) fn notify_err(err: Err) -> Result<(), ErrHandlingError> {
     let tm = Utc::now();
     let err = sync::Arc::new(err);
 
-    #[cfg(feature = "errs-notify")]
+    #[cfg(feature = "notify")]
     let result_std = std_handler::handle_err(&std_handler::HANDLERS, sync::Arc::clone(&err), tm);
 
-    #[cfg(feature = "errs-notify-tokio")]
+    #[cfg(feature = "notify-tokio")]
     let result_tokio =
         tokio_handler::handle_err(&tokio_handler::HANDLERS, sync::Arc::clone(&err), tm);
 
-    #[cfg(feature = "errs-notify")]
+    #[cfg(feature = "notify")]
     result_std?;
-    #[cfg(feature = "errs-notify-tokio")]
+    #[cfg(feature = "notify-tokio")]
     result_tokio?;
 
     Ok(())

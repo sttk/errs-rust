@@ -12,11 +12,11 @@
 //! variant representing the reason is useful for identifying the specific error, locating where it
 //! occurred, or generating appropriate error messages, etc.
 //!
-//! Optionally, by using `errs-notify` feature and registering error handlers in advance, it is
+//! Optionally, by using `notify` feature and registering error handlers in advance, it is
 //! possible to receive notifications either synchronously or asynchronously at the time the error
 //! struct is created.
 //!
-//! There is also an `errs-notify-tokio` feature, which is for applications that use the Tokio
+//! There is also an `notify-tokio` feature, which is for applications that use the Tokio
 //! runtime. If this feature is used, error notifications are received by asynchronous handlers
 //! running on the Tokio runtime.
 //!
@@ -29,20 +29,20 @@
 //! errs = "0.7.1"
 //! ```
 //!
-//! If you want to use error notification, specify `errs-notify` or `errs-notify-tokio` in the
-//! dependency features. The `errs-notify` feature is for general use, while the
-//! `errs-notify-tokio` feature is for use with the Tokio runtime.
+//! If you want to use error notification, specify `notify` or `notify-tokio` in the
+//! dependency features. The `notify` feature is for general use, while the
+//! `notify-tokio` feature is for use with the Tokio runtime.
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.7.1", features = ["errs-notify"] }
+//! errs = { version = "0.7.1", features = ["notify"] }
 //! ```
 //!
-//! If you are using Tokio, you should specify `errs-notify-tokio`:
+//! If you are using Tokio, you should specify `notify-tokio`:
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.7.1", features = ["errs-notify-tokio"] }
+//! errs = { version = "0.7.1", features = ["notify-tokio"] }
 //! ```
 //!
 //! ## Usage
@@ -95,17 +95,17 @@
 //! Statically registers a synchronous error handler.
 //!
 //! ```rust
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! use errs::{add_sync_err_handler, Err};
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! use chrono::{DateTime, Utc};
 //!
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! fn my_static_sync_handler(err: &Err, tm: DateTime<Utc>) {
 //!     println!("[Static Sync] Error at {}: {}", tm, err);
 //! }
 //!
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! add_sync_err_handler!(my_static_sync_handler);
 //! ```
 //!
@@ -113,17 +113,17 @@
 //! Statically registers a general-purpose asynchronous error handler.
 //!
 //! ```rust
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! use errs::{add_async_err_handler, Err};
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! use chrono::{DateTime, Utc};
 //!
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! fn my_static_async_handler(err: &Err, tm: DateTime<Utc>) {
 //!     println!("[Static Async] Error at {}: {}", tm, err);
 //! }
 //!
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! add_async_err_handler!(my_static_async_handler);
 //! ```
 //!
@@ -131,26 +131,26 @@
 //! Statically registers a Tokio-based asynchronous error handler.
 //!
 //! ```rust
-//! #[cfg(feature = "errs-notify-tokio")]
+//! #[cfg(feature = "notify-tokio")]
 //! use errs::{add_tokio_async_err_handler, Err};
-//! #[cfg(feature = "errs-notify-tokio")]
+//! #[cfg(feature = "notify-tokio")]
 //! use chrono::{DateTime, Utc};
 //! use std::sync::Arc;
 //!
-//! #[cfg(feature = "errs-notify-tokio")]
+//! #[cfg(feature = "notify-tokio")]
 //! add_tokio_async_err_handler!(async |err: Arc<Err>, tm: DateTime<Utc>| {
 //!     tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 //!     println!("[Static Tokio Async] Error at {}: {}", tm, err);
 //! });
 //!
 //! // You can also register a function pointer:
-//! // #[cfg(feature = "errs-notify-tokio")]
+//! // #[cfg(feature = "notify-tokio")]
 //! // fn my_static_tokio_handler(err: Arc<Err>, tm: DateTime<Utc>) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> {
 //! //     Box::pin(async move {
 //! //         println!("[Static Tokio Async Fn] Error at {}: {}", tm, err);
 //! //     })
 //! // }
-//! // #[cfg(feature = "errs-notify-tokio")]
+//! // #[cfg(feature = "notify-tokio")]
 //! // add_tokio_async_err_handler!(my_static_tokio_handler);
 //! ```
 //!
@@ -171,10 +171,10 @@
 //! specifically for applications using the Tokio runtime.
 //!
 //! For general-purpose asynchronous notifications, use the `add_async_err_handler` function.
-//! This function is available when the `errs-notify` feature is enabled.
+//! This function is available when the `notify` feature is enabled.
 //!
 //! For applications using the Tokio runtime, the `add_tokio_async_err_handler` function should
-//! be used. This function is available when the `errs-notify-tokio` feature is enabled and
+//! be used. This function is available when the `notify-tokio` feature is enabled and
 //! ensures that the asynchronous error handling is integrated with the Tokio runtime.
 //!
 //! Error notifications will not occur until the `fix_err_handlers` function is called.
@@ -182,17 +182,17 @@
 //! enabling notification processing.
 //!
 //! ```rust
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! errs::add_sync_err_handler(|err, tm| {
 //!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! });
 //!
-//! #[cfg(feature = "errs-notify")]
+//! #[cfg(feature = "notify")]
 //! errs::add_async_err_handler(|err, tm| {
 //!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! });
 //!
-//! #[cfg(feature = "errs-notify-tokio")]
+//! #[cfg(feature = "notify-tokio")]
 //! errs::add_tokio_async_err_handler(async |err, tm| {
 //!     println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! });
@@ -201,7 +201,7 @@
 //! //    println!("{}:{}:{} - {}", tm, err.file(), err.line(), err);
 //! //}));
 //!
-//! #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
+//! #[cfg(any(feature = "notify", feature = "notify-tokio"))]
 //! errs::fix_err_handlers();
 //! ```
 
@@ -209,37 +209,28 @@
 
 mod err;
 
-#[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
-#[cfg_attr(
-    docsrs,
-    doc(cfg(any(feature = "errs-notify", feature = "errs-notify-tokio")))
-)]
+#[cfg(any(feature = "notify", feature = "notify-tokio"))]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "notify", feature = "notify-tokio"))))]
 mod notify;
 
-#[cfg(feature = "errs-notify")]
-#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify")))]
+#[cfg(feature = "notify")]
+#[cfg_attr(docsrs, doc(cfg(feature = "notify")))]
 pub use notify::{
     add_async_err_handler, add_sync_err_handler, AsyncHandlerRegistration, SyncHandlerRegistration,
 };
 
-#[cfg(feature = "errs-notify-tokio")]
-#[cfg_attr(docsrs, doc(cfg(feature = "errs-notify-tokio")))]
+#[cfg(feature = "notify-tokio")]
+#[cfg_attr(docsrs, doc(cfg(feature = "notify-tokio")))]
 pub use notify::{add_tokio_async_err_handler, TokioAsyncHandlerRegistration};
 
-#[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
-#[cfg_attr(
-    docsrs,
-    doc(cfg(any(feature = "errs-notify", feature = "errs-notify-tokio")))
-)]
+#[cfg(any(feature = "notify", feature = "notify-tokio"))]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "notify", feature = "notify-tokio"))))]
 pub use notify::{fix_err_handlers, ErrHandlingError, ErrHandlingErrorKind};
 
 use std::{any, cell, error, fmt, marker, ptr, result};
 
-#[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
-#[cfg_attr(
-    docsrs,
-    doc(cfg(any(feature = "errs-notify", feature = "errs-notify-tokio")))
-)]
+#[cfg(any(feature = "notify", feature = "notify-tokio"))]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "notify", feature = "notify-tokio"))))]
 use std::sync::atomic;
 
 /// Struct that represents an error with a reason.
@@ -287,7 +278,7 @@ where
     debug_fn: fn(ptr::NonNull<ReasonAndSource>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     display_fn: fn(ptr::NonNull<ReasonAndSource>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     source_fn: fn(ptr::NonNull<ReasonAndSource>) -> Option<&'static (dyn error::Error + 'static)>,
-    #[cfg(any(feature = "errs-notify", feature = "errs-notify-tokio"))]
+    #[cfg(any(feature = "notify", feature = "notify-tokio"))]
     is_referenced_by_another: atomic::AtomicBool,
     reason_and_source: (R, Option<E>),
 }
