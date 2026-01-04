@@ -19,8 +19,8 @@ jobs:
         with:
           toolchain: ${{ matrix.rustver }}
       - run: cargo test --features default -- --show-output
-      - run: cargo test --features errs-notify -- --show-output
-      - run: cargo test --features errs-notify-tokio -- --show-output
+      - run: cargo test --features notify -- --show-output
+      - run: cargo test --features notify-tokio -- --show-output
       - run: cargo test --features full -- --show-output
 
   cover:

@@ -5,7 +5,7 @@ mod tests_of_notification {
     static LOGGER: LazyLock<Mutex<(Vec<String>, Vec<String>)>> =
         LazyLock::new(|| Mutex::new((Vec::new(), Vec::new())));
 
-    #[cfg(feature = "errs-notify")]
+    #[cfg(feature = "notify")]
     errs::add_sync_err_handler!(|err, _tm| {
         LOGGER
             .lock()
@@ -19,12 +19,12 @@ mod tests_of_notification {
         FailToDoSomething,
     }
 
-    #[cfg(feature = "errs-notify")]
+    #[cfg(feature = "notify")]
     const BASE_LINE: u32 = line!();
 
     #[test]
     fn test() {
-        #[cfg(feature = "errs-notify")]
+        #[cfg(feature = "notify")]
         let _ = errs::add_sync_err_handler(|err, _| {
             LOGGER
                 .lock()
@@ -35,7 +35,7 @@ mod tests_of_notification {
 
         let _err = errs::Err::new(Reasons::FailToDoSomething);
 
-        #[cfg(feature = "errs-notify")]
+        #[cfg(feature = "notify")]
         {
             let logs = &LOGGER.lock().unwrap().0;
             assert_eq!(logs.len(), 2);
@@ -50,7 +50,7 @@ mod tests_of_notification {
                 assert_eq!(logs[1], format!("[local sync] errs::Err {{ reason = sync_handler_registration_order_test::tests_of_notification::Reasons FailToDoSomething, file = tests\\sync_handler_registration_order_test.rs, line = {} }}", BASE_LINE + 13));
             }
         }
-        #[cfg(not(feature = "errs-notify"))]
+        #[cfg(not(feature = "notify"))]
         {
             let logs = &LOGGER.lock().unwrap().0;
             assert_eq!(logs.len(), 0);
