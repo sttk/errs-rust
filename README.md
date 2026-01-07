@@ -12,7 +12,7 @@ In `Cargo.toml`, write this crate as a dependency:
 
 ```toml
 [dependencies]
-errs = "0.8.0"
+errs = "0.8.1"
 ```
 
 If you want to use error notification, specify the `notify` or `notify-tokio` in the dependency features.
@@ -20,14 +20,14 @@ The `notify` feature is for general use, while the `notify-tokio` feature is for
 
 ```toml
 [dependencies]
-errs = { version = "0.8.0", features = ["notify"] }
+errs = { version = "0.8.1", features = ["notify"] }
 ```
 
 If you are using Tokio, you should specify `notify-tokio`:
 
 ```toml
 [dependencies]
-errs = { version = "0.8.0", features = ["notify-tokio"] }
+errs = { version = "0.8.1", features = ["notify-tokio"] }
 ```
 
 ## Usage
@@ -190,7 +190,7 @@ See the file LICENSE in this distribution for more details.
 
 
 [repo-url]: https://github.com/sttk/errs-rust
-[cratesio-img]: https://img.shields.io/badge/crates.io-ver.0.8.0-fc8d62?logo=rust
+[cratesio-img]: https://img.shields.io/badge/crates.io-ver.0.8.1-fc8d62?logo=rust
 [cratesio-url]: https://crates.io/crates/errs
 [docrs-img]: https://img.shields.io/badge/doc.rs-errs-66c2a5?logo=docs.rs
 [docrs-url]: https://docs.rs/errs
