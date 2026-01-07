@@ -95,29 +95,32 @@ pub(crate) fn handle_err(
     err: Arc<Err>,
     tm: DateTime<Utc>,
 ) -> Result<(), ErrHandlingError> {
-    let result = match handlers.transition_to_read(register_handlers_by_inventory) {
-        Ok(_) => handlers.read(),
-        Err(e) => match e.kind() {
-            PhasedErrorKind::PhaseIsAlreadyRead => handlers.read_relaxed(),
-            PhasedErrorKind::DuringTransitionToRead => handlers.read(),
-            PhasedErrorKind::InternalDataUnavailable => {
-                return Err(ErrHandlingError::new(
-                    ErrHandlingErrorKind::InvalidInternalState,
-                ));
-            }
-            PhasedErrorKind::InternalDataMutexIsPoisoned => {
-                return Err(ErrHandlingError::new(
-                    ErrHandlingErrorKind::StdMutexIsPoisoned,
-                ));
-            }
-            // PhasedErrorKind::FailToRunClosureDuringTransitionToRead => {}, // impossible case
-            _ => {
-                return Err(ErrHandlingError::new(
-                    ErrHandlingErrorKind::InvalidCallTiming,
-                ));
-            }
-        },
-    };
+    let mut result = handlers.read_relaxed();
+    if result.is_err() {
+        result = match handlers.transition_to_read(register_handlers_by_inventory) {
+            Ok(_) => handlers.read_relaxed(),
+            Err(e) => match e.kind() {
+                PhasedErrorKind::PhaseIsAlreadyRead => handlers.read_relaxed(),
+                PhasedErrorKind::DuringTransitionToRead => handlers.read(),
+                PhasedErrorKind::InternalDataUnavailable => {
+                    return Err(ErrHandlingError::new(
+                        ErrHandlingErrorKind::InvalidInternalState,
+                    ));
+                }
+                PhasedErrorKind::InternalDataMutexIsPoisoned => {
+                    return Err(ErrHandlingError::new(
+                        ErrHandlingErrorKind::StdMutexIsPoisoned,
+                    ));
+                }
+                // PhasedErrorKind::FailToRunClosureDuringTransitionToRead => {}, // impossible case
+                _ => {
+                    return Err(ErrHandlingError::new(
+                        ErrHandlingErrorKind::InvalidCallTiming,
+                    ));
+                }
+            },
+        };
+    }
 
     match result {
         Ok(vv) => {
