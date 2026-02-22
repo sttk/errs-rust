@@ -158,6 +158,14 @@ impl Err {
         self.line
     }
 
+    /// Gets the source of the error, if any.
+    ///
+    /// This method is equivalent to the `source` method of the `std::error::Error` trait.
+    pub fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        let source_fn = unsafe { (*self.reason_and_source.non_null_ptr.as_ptr()).source_fn };
+        source_fn(self.reason_and_source.non_null_ptr)
+    }
+
     /// Attempts to retrieve the error's reason as a specific type.
     ///
     /// This method checks whether the stored reason matches the specified type
@@ -487,7 +495,6 @@ mod tests_of_err {
 
     mod test_of_new {
         use super::*;
-        use std::error::Error;
 
         #[derive(Debug)]
         enum Enum0 {
@@ -505,7 +512,7 @@ mod tests_of_err {
             assert_eq!(err.file(), "src/err.rs");
             #[cfg(windows)]
             assert_eq!(err.file(), "src\\err.rs");
-            assert_eq!(err.line(), BASE_LINE + 75);
+            assert_eq!(err.line(), BASE_LINE + 74);
             assert_eq!(
                 format!("{err}"),
                 "InvalidValue { name: \"foo\", value: \"abc\" }",
@@ -513,12 +520,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 75),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 74),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 75),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_new::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 74),
             );
 
             match err.reason::<Enum0>().unwrap() {
@@ -533,7 +540,6 @@ mod tests_of_err {
 
     mod test_of_with_source {
         use super::*;
-        use std::error::Error;
 
         #[derive(Debug)]
         enum Enum0 {
@@ -556,7 +562,7 @@ mod tests_of_err {
             #[cfg(windows)]
             assert_eq!(err.file, "src\\err.rs");
 
-            assert_eq!(err.line, BASE_LINE + 122);
+            assert_eq!(err.line, BASE_LINE + 120);
             assert_eq!(
                 format!("{err}"),
                 "InvalidValue { name: \"foo\", value: \"abc\" }",
@@ -565,12 +571,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = Custom {{ kind: NotFound, error: \"oh no!\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 122),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = Custom {{ kind: NotFound, error: \"oh no!\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 120),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = Custom {{ kind: NotFound, error: \"oh no!\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 122),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = Custom {{ kind: NotFound, error: \"oh no!\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 120),
             );
 
             match err.reason::<Enum0>().unwrap() {
@@ -625,7 +631,7 @@ mod tests_of_err {
             assert_eq!(err.file, "src/err.rs");
             #[cfg(windows)]
             assert_eq!(err.file, "src\\err.rs");
-            assert_eq!(err.line, BASE_LINE + 192);
+            assert_eq!(err.line, BASE_LINE + 190);
             assert_eq!(
                 format!("{err}"),
                 "InvalidValue { name: \"foo\", value: \"abc\" }",
@@ -633,12 +639,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = MyError {{ message: \"hello\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 192),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = MyError {{ message: \"hello\" }}, file = src/err.rs, line = {} }}", BASE_LINE + 190),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = MyError {{ message: \"hello\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 192),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_with_source::Enum0 InvalidValue {{ name: \"foo\", value: \"abc\" }}, source = MyError {{ message: \"hello\" }}, file = src\\err.rs, line = {} }}", BASE_LINE + 190),
             );
 
             assert!(err.source().is_some());
@@ -656,7 +662,6 @@ mod tests_of_err {
 
     mod test_of_reason {
         use super::*;
-        use std::error::Error;
 
         #[test]
         fn reason_is_a_boolean() {
@@ -667,7 +672,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = bool true, file = src/err.rs, line = {} }}",
-                    BASE_LINE + 239,
+                    BASE_LINE + 236,
                 ),
             );
             #[cfg(windows)]
@@ -675,7 +680,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = bool true, file = src\\err.rs, line = {} }}",
-                    BASE_LINE + 239,
+                    BASE_LINE + 236,
                 ),
             );
 
@@ -697,7 +702,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = i64 123, file = src/err.rs, line = {} }}",
-                    BASE_LINE + 269,
+                    BASE_LINE + 266,
                 ),
             );
             #[cfg(windows)]
@@ -705,7 +710,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = i64 123, file = src\\err.rs, line = {} }}",
-                    BASE_LINE + 269,
+                    BASE_LINE + 266,
                 ),
             );
 
@@ -726,7 +731,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = alloc::string::String \"abc\", file = src/err.rs, line = {} }}",
-                    BASE_LINE + 298,
+                    BASE_LINE + 295,
                 ),
             );
             #[cfg(windows)]
@@ -734,7 +739,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = alloc::string::String \"abc\", file = src\\err.rs, line = {} }}",
-                    BASE_LINE + 298,
+                    BASE_LINE + 295,
                 ),
             );
 
@@ -762,12 +767,12 @@ mod tests_of_err {
             #[cfg(unix)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_reason::StructA StructA {{ name: \"abc\", value: 123 }}, file = src/err.rs, line = {} }}", BASE_LINE + 333),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_reason::StructA StructA {{ name: \"abc\", value: 123 }}, file = src/err.rs, line = {} }}", BASE_LINE + 330),
             );
             #[cfg(windows)]
             assert_eq!(
                 format!("{err:?}"),
-                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_reason::StructA StructA {{ name: \"abc\", value: 123 }}, file = src\\err.rs, line = {} }}", BASE_LINE + 333),
+                format!("errs::Err {{ reason = errs::err::tests_of_err::test_of_reason::StructA StructA {{ name: \"abc\", value: 123 }}, file = src\\err.rs, line = {} }}", BASE_LINE + 330),
             );
 
             match err.reason::<StructA>() {
@@ -790,7 +795,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = () (), file = src/err.rs, line = {} }}",
-                    BASE_LINE + 362,
+                    BASE_LINE + 359,
                 ),
             );
             #[cfg(windows)]
@@ -798,7 +803,7 @@ mod tests_of_err {
                 format!("{err:?}"),
                 format!(
                     "errs::Err {{ reason = () (), file = src\\err.rs, line = {} }}",
-                    BASE_LINE + 362,
+                    BASE_LINE + 359,
                 ),
             );
 
