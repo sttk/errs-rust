@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod integration_tests_of_err {
     use errs;
-    use std::error::Error;
 
     #[derive(Debug)]
     enum IoErrs {
@@ -128,12 +127,12 @@ mod integration_tests_of_err {
         #[cfg(unix)]
         assert_eq!(
             format!("{err:?}"),
-            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs FileNotFound { path: \"/aaa/bbb/ccc\" }, file = tests/errs_test.rs, line = 14 }"
+            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs FileNotFound { path: \"/aaa/bbb/ccc\" }, file = tests/errs_test.rs, line = 13 }"
         );
         #[cfg(windows)]
         assert_eq!(
             format!("{err:?}"),
-            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs FileNotFound { path: \"/aaa/bbb/ccc\" }, file = tests\\errs_test.rs, line = 14 }"
+            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs FileNotFound { path: \"/aaa/bbb/ccc\" }, file = tests\\errs_test.rs, line = 13 }"
         );
 
         let err = read_file().unwrap_err();
@@ -141,12 +140,12 @@ mod integration_tests_of_err {
         #[cfg(unix)]
         assert_eq!(
             format!("{err:?}"),
-            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs NoPermission { path: \"/aaa/bbb/ccc\", mod: (4, 4, 4) }, file = tests/errs_test.rs, line = 21 }"
+            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs NoPermission { path: \"/aaa/bbb/ccc\", mod: (4, 4, 4) }, file = tests/errs_test.rs, line = 20 }"
         );
         #[cfg(windows)]
         assert_eq!(
             format!("{err:?}"),
-            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs NoPermission { path: \"/aaa/bbb/ccc\", mod: (4, 4, 4) }, file = tests\\errs_test.rs, line = 21 }"
+            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs NoPermission { path: \"/aaa/bbb/ccc\", mod: (4, 4, 4) }, file = tests\\errs_test.rs, line = 20 }"
         );
 
         let err = write_file().unwrap_err();
@@ -154,12 +153,12 @@ mod integration_tests_of_err {
         #[cfg(unix)]
         assert_eq!(
             format!("{err:?}"),
-            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs DueToSomeError { path: \"/aaa/bbb/ccc\" }, source = Custom { kind: AlreadyExists, error: \"/aaa/bbb/ccc\" }, file = tests/errs_test.rs, line = 31 }"
+            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs DueToSomeError { path: \"/aaa/bbb/ccc\" }, source = Custom { kind: AlreadyExists, error: \"/aaa/bbb/ccc\" }, file = tests/errs_test.rs, line = 30 }"
         );
         #[cfg(windows)]
         assert_eq!(
             format!("{err:?}"),
-            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs DueToSomeError { path: \"/aaa/bbb/ccc\" }, source = Custom { kind: AlreadyExists, error: \"/aaa/bbb/ccc\" }, file = tests\\errs_test.rs, line = 31 }"
+            "errs::Err { reason = errs_test::integration_tests_of_err::IoErrs DueToSomeError { path: \"/aaa/bbb/ccc\" }, source = Custom { kind: AlreadyExists, error: \"/aaa/bbb/ccc\" }, file = tests\\errs_test.rs, line = 30 }"
         );
     }
 
