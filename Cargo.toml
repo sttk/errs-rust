@@ -1,6 +1,6 @@
 [package]
 name = "errs"
-version = "0.8.1"
+version = "0.8.2"
 authors = ["Takayuki Sato <sttk.xslet@gmail.com>"]
 edition = "2021"
 rust-version = "1.80.1"
@@ -15,7 +15,7 @@ categories = ["rust-patterns"]
 [dependencies]
 chrono = { version = "0.4", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"], optional = true }
-setup_read_cleanup = { version = "0.6", optional = true }
+setup_read_cleanup = { version = "0.8", optional = true }
 inventory = { version = "0.3", optional = true }
 
 [dev-dependencies]

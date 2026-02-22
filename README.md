@@ -12,7 +12,7 @@ In `Cargo.toml`, write this crate as a dependency:
 
 ```toml
 [dependencies]
-errs = "0.8.1"
+errs = "0.8.2"
 ```
 
 If you want to use error notification, specify the `notify` or `notify-tokio` in the dependency features.
@@ -20,14 +20,14 @@ The `notify` feature is for general use, while the `notify-tokio` feature is for
 
 ```toml
 [dependencies]
-errs = { version = "0.8.1", features = ["notify"] }
+errs = { version = "0.8.2", features = ["notify"] }
 ```
 
 If you are using Tokio, you should specify `notify-tokio`:
 
 ```toml
 [dependencies]
-errs = { version = "0.8.1", features = ["notify-tokio"] }
+errs = { version = "0.8.2", features = ["notify-tokio"] }
 ```
 
 ## Usage
@@ -159,23 +159,23 @@ This crate supports Rust 1.80.1 or later.
 % ./build.sh msrv
   [Meta]   cargo-msrv 0.18.4
 
-Compatibility Check #1: Rust 1.74.1
+Compatibility Check #1: Rust 1.75.0
   [FAIL]   Is incompatible
 
-Compatibility Check #2: Rust 1.83.0
+Compatibility Check #2: Rust 1.84.1
   [OK]     Is compatible
 
-Compatibility Check #3: Rust 1.78.0
+Compatibility Check #3: Rust 1.79.0
   [FAIL]   Is incompatible
 
-Compatibility Check #4: Rust 1.80.1
+Compatibility Check #4: Rust 1.81.0
   [OK]     Is compatible
 
-Compatibility Check #5: Rust 1.79.0
-  [FAIL]   Is incompatible
+Compatibility Check #5: Rust 1.80.1
+  [OK]     Is compatible
 
 Result:
-   Considered (min … max):   Rust 1.56.1 … Rust 1.92.0
+   Considered (min … max):   Rust 1.56.1 … Rust 1.93.1
    Search method:            bisect
    MSRV:                     1.80.1
    Target:                   x86_64-apple-darwin
@@ -190,7 +190,7 @@ See the file LICENSE in this distribution for more details.
 
 
 [repo-url]: https://github.com/sttk/errs-rust
-[cratesio-img]: https://img.shields.io/badge/crates.io-ver.0.8.1-fc8d62?logo=rust
+[cratesio-img]: https://img.shields.io/badge/crates.io-ver.0.8.2-fc8d62?logo=rust
 [cratesio-url]: https://crates.io/crates/errs
 [docrs-img]: https://img.shields.io/badge/doc.rs-errs-66c2a5?logo=docs.rs
 [docrs-url]: https://docs.rs/errs
