@@ -227,11 +227,8 @@ pub use notify::{add_tokio_async_err_handler, TokioAsyncHandlerRegistration};
 #[cfg_attr(docsrs, doc(cfg(any(feature = "notify", feature = "notify-tokio"))))]
 pub use notify::{fix_err_handlers, ErrHandlingError, ErrHandlingErrorKind};
 
-use std::{any, cell, error, fmt, marker, ptr, result};
-
-#[cfg(any(feature = "notify", feature = "notify-tokio"))]
-#[cfg_attr(docsrs, doc(cfg(any(feature = "notify", feature = "notify-tokio"))))]
 use std::sync::atomic;
+use std::{any, cell, error, fmt, marker, ptr, result};
 
 /// Struct that represents an error with a reason.
 ///
@@ -278,8 +275,7 @@ where
     debug_fn: fn(ptr::NonNull<ReasonAndSource>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     display_fn: fn(ptr::NonNull<ReasonAndSource>, f: &mut fmt::Formatter<'_>) -> fmt::Result,
     source_fn: fn(ptr::NonNull<ReasonAndSource>) -> Option<&'static (dyn error::Error + 'static)>,
-    #[cfg(any(feature = "notify", feature = "notify-tokio"))]
-    is_referenced_by_another: atomic::AtomicBool,
+    ref_count: atomic::AtomicUsize,
     reason_and_source: (R, Option<E>),
 }
 
