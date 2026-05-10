@@ -7,10 +7,8 @@ use crate::{Err, ReasonAndSource, SendSyncNonNull};
 #[cfg(any(feature = "notify", feature = "notify-tokio"))]
 use crate::notify;
 
-use std::{any, error, fmt, marker, panic, ptr};
-
-#[cfg(any(feature = "notify", feature = "notify-tokio"))]
 use std::sync::atomic;
+use std::{any, error, fmt, marker, panic, process, ptr};
 
 unsafe impl<T: Send + Sync> Send for SendSyncNonNull<T> {}
 unsafe impl<T: Send + Sync> Sync for SendSyncNonNull<T> {}
@@ -56,31 +54,20 @@ impl Err {
         let boxed = Box::new(ReasonAndSource::<R>::new(reason));
         let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonAndSource>();
 
+        let err = Self {
+            file: loc.file(),
+            line: loc.line(),
+            reason_and_source: SendSyncNonNull::new(ptr),
+        };
+
         #[cfg(any(feature = "notify", feature = "notify-tokio"))]
         {
-            let err_notified = Self {
-                file: loc.file(),
-                line: loc.line(),
-                reason_and_source: SendSyncNonNull::new(ptr),
-            };
-            if let Err(e) = notify::notify_err(err_notified) {
-                eprintln!("ERROR(errs): {e:?}");
+            if let Err(e) = notify::notify_err(err.clone()) {
+                eprintln!("ERROR(errs): failed to notify error={err:?}: {e:?}");
             }
+        }
 
-            Self {
-                file: loc.file(),
-                line: loc.line(),
-                reason_and_source: SendSyncNonNull::new(ptr),
-            }
-        }
-        #[cfg(not(any(feature = "notify", feature = "notify-tokio")))]
-        {
-            Self {
-                file: loc.file(),
-                line: loc.line(),
-                reason_and_source: SendSyncNonNull::new(ptr),
-            }
-        }
+        err
     }
 
     /// Creates a new `Err` instance with the give reason and underlying source error.
@@ -119,31 +106,20 @@ impl Err {
         let boxed = Box::new(ReasonAndSource::<R, E>::with_source(reason, source));
         let ptr = ptr::NonNull::from(Box::leak(boxed)).cast::<ReasonAndSource>();
 
+        let err = Self {
+            file: loc.file(),
+            line: loc.line(),
+            reason_and_source: SendSyncNonNull::new(ptr),
+        };
+
         #[cfg(any(feature = "notify", feature = "notify-tokio"))]
         {
-            let err_notified = Self {
-                file: loc.file(),
-                line: loc.line(),
-                reason_and_source: SendSyncNonNull::new(ptr),
-            };
-            if let Err(e) = notify::notify_err(err_notified) {
-                eprintln!("ERROR(errs): {e:?}");
+            if let Err(e) = notify::notify_err(err.clone()) {
+                eprintln!("ERROR(errs): failed to notify error={err:?}: {e:?}");
             }
+        }
 
-            Self {
-                file: loc.file(),
-                line: loc.line(),
-                reason_and_source: SendSyncNonNull::new(ptr),
-            }
-        }
-        #[cfg(not(any(feature = "notify", feature = "notify-tokio")))]
-        {
-            Self {
-                file: loc.file(),
-                line: loc.line(),
-                reason_and_source: SendSyncNonNull::new(ptr),
-            }
-        }
+        err
     }
 
     /// Gets the name of the source file where the error occurred.
@@ -261,6 +237,25 @@ impl Err {
     }
 }
 
+const MAX_REF_COUNT: usize = (isize::MAX) as usize;
+
+impl Clone for Err {
+    fn clone(&self) -> Self {
+        let ptr = self.reason_and_source.non_null_ptr.as_ptr();
+        let old_count = unsafe { &(*ptr).ref_count }.fetch_add(1, atomic::Ordering::Relaxed);
+
+        if old_count > MAX_REF_COUNT {
+            process::abort();
+        }
+
+        Self {
+            file: self.file,
+            line: self.line,
+            reason_and_source: SendSyncNonNull::new(self.reason_and_source.non_null_ptr),
+        }
+    }
+}
+
 impl Drop for Err {
     fn drop(&mut self) {
         let drop_fn = unsafe { (*self.reason_and_source.non_null_ptr.as_ptr()).drop_fn };
@@ -305,8 +300,7 @@ where
             debug_fn: debug_reason_and_source::<R, E>,
             display_fn: display_reason_and_source::<R, E>,
             source_fn: get_source::<R, E>,
-            #[cfg(any(feature = "notify", feature = "notify-tokio"))]
-            is_referenced_by_another: atomic::AtomicBool::new(true),
+            ref_count: atomic::AtomicUsize::new(1),
             reason_and_source: (reason, None),
         }
     }
@@ -318,8 +312,7 @@ where
             debug_fn: debug_reason_and_source::<R, E>,
             display_fn: display_reason_and_source::<R, E>,
             source_fn: get_source::<R, E>,
-            #[cfg(any(feature = "notify", feature = "notify-tokio"))]
-            is_referenced_by_another: atomic::AtomicBool::new(true),
+            ref_count: atomic::AtomicUsize::new(1),
             reason_and_source: (reason, Some(*Box::new(source))),
         }
     }
@@ -338,16 +331,21 @@ where
     E: error::Error + Send + Sync + 'static,
 {
     let typed_ptr = ptr.cast::<ReasonAndSource<R, E>>().as_ptr();
-    #[cfg(any(feature = "notify", feature = "notify-tokio"))]
-    {
-        let is_ref = unsafe { &(*typed_ptr).is_referenced_by_another };
-        if !is_ref.fetch_and(false, atomic::Ordering::AcqRel) {
-            unsafe { drop(Box::from_raw(typed_ptr)) };
-        }
-    }
-    #[cfg(not(any(feature = "notify", feature = "notify-tokio")))]
-    {
+    let old_count = unsafe {
+        (*typed_ptr)
+            .ref_count
+            .fetch_sub(1, atomic::Ordering::AcqRel)
+    };
+    if old_count == 1 {
+        // Ensure that any memory accesses from other threads are synchronized
+        // before we proceed with dropping the data. This synchronizes with
+        // the Release operation in fetch_sub.
+        atomic::fence(atomic::Ordering::Acquire);
+
         unsafe { drop(Box::from_raw(typed_ptr)) };
+    } else if old_count == 0 {
+        // impossible case
+        process::abort();
     }
 }
 
@@ -857,6 +855,35 @@ mod tests_of_err {
                 }
                 _ => panic!(),
             });
+        }
+    }
+
+    mod test_of_clone_and_drop {
+        use super::*;
+
+        #[test]
+        fn test_sync() {
+            let err0 = Err::new("1");
+            let err1 = err0.clone();
+            {
+                let _err2 = err0.clone();
+            }
+            let _err3 = err1.clone();
+        }
+
+        #[test]
+        fn test_async() {
+            let err0 = Err::new("1");
+
+            for _i in 1..10 {
+                let err = err0.clone();
+                std::thread::spawn(move || {
+                    let _s = err.reason::<&str>();
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                });
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
 }

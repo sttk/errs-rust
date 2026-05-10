@@ -10,3 +10,8 @@ error[E0505]: cannot move out of `err` because it is borrowed
    |               ^^^ move out of `err` occurs here
 20 |   println!("{:?}", reason);
    |                    ------ borrow later used here
+   |
+help: consider cloning the value if the performance cost is acceptable
+   |
+17 |   let reason = err.clone().reason::<Reasons>().unwrap();
+   |                   ++++++++
