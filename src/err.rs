@@ -2,7 +2,7 @@
 // This program is free software under MIT License.
 // See the file LICENSE in this distribution for more details.
 
-use crate::{Err, ReasonAndSource, SendSyncNonNull};
+use crate::{Err, ReasonAndSource, ReasonMatcher, SendSyncNonNull};
 
 #[cfg(any(feature = "notify", feature = "notify-tokio"))]
 use crate::notify;
@@ -190,50 +190,89 @@ impl Err {
         }
     }
 
-    /// Executes a function if the error's reason matches a specific type.
+    /// Matches the reason of this error with a specified type.
     ///
-    /// This method allows you to perform actions based on the type of the error's reason.
-    /// If the reason matches the expected type, the provided function is called with
-    /// a reference to the reason.
+    /// If the reason matches the type `R`, the provided function `func` is called with a reference
+    /// to the reason.
+    /// This method returns a [`ReasonMatcher`] that allows for further chaining with
+    /// [`or_match_reason`](ReasonMatcher::or_match_reason) or finalizing with
+    /// [`or_result`](ReasonMatcher::or_result).
     ///
-    /// # Parameters
-    /// - `R`: The expected type of the reason.
-    /// - `func`: The function to execute if the reason matches the type.
-    ///
-    /// # Returns
-    /// A reference to the current `Err` instance.
-    ///
+    /// # Examples
     ///
     /// ```rust
     /// use errs::Err;
     ///
     /// #[derive(Debug)]
-    /// enum Reasons {
-    ///     IllegalState { state: String },
-    /// }
+    /// enum IoErrs { FileNotFound { path: String } }
     ///
-    /// let err = Err::new(Reasons::IllegalState { state: "bad state".to_string() });
-    /// err.match_reason::<Reasons>(|r| match r {
-    ///     Reasons::IllegalState { state } => println!("state = {state}"),
-    ///     _ => { /* ... */ }
-    /// })
-    /// .match_reason::<String>(|s| {
-    ///     println!("string reason = {s}");
-    /// });
+    /// let err = Err::new(IoErrs::FileNotFound { path: "test.txt".to_string() });
+    ///
+    /// let result = err.match_reason::<IoErrs, String>(|r| match r {
+    ///     IoErrs::FileNotFound { path } => Ok(path.clone()),
+    /// }).or_match_reason::<String>(|s| {
+    ///     Ok(s.clone())
+    /// }).or_result(|_| Ok("default".to_string()));
+    ///
+    /// assert_eq!(result.unwrap(), "test.txt");
     /// ```
-    pub fn match_reason<R>(&self, func: fn(&R)) -> &Self
+    pub fn match_reason<R, T>(&self, func: impl FnOnce(&R) -> Result<T, Err>) -> ReasonMatcher<T>
     where
         R: fmt::Debug + Send + Sync + 'static,
     {
         let type_id = any::TypeId::of::<R>();
         let ptr = self.reason_and_source.non_null_ptr.as_ptr();
         let is_fn = unsafe { (*ptr).is_fn };
-        if is_fn(type_id) {
+        let result = if is_fn(type_id) {
             let typed_ptr = ptr as *const ReasonAndSource<R>;
-            func(unsafe { &((*typed_ptr).reason_and_source.0) });
-        }
+            Ok(func(unsafe { &((*typed_ptr).reason_and_source.0) }))
+        } else {
+            Err(self.clone())
+        };
+        ReasonMatcher { result }
+    }
+}
 
-        self
+impl<T> ReasonMatcher<T> {
+    /// Matches the reason of the error with another specified type if previous matches failed.
+    ///
+    /// If the previous match attempts in the chain did not find a matching type, and the reason
+    /// matches the type `R`, the provided function `func` is called with a reference to the
+    /// reason.
+    pub fn or_match_reason<R>(self, func: impl FnOnce(&R) -> Result<T, Err>) -> ReasonMatcher<T>
+    where
+        R: fmt::Debug + Send + Sync + 'static,
+    {
+        match self.result {
+            Ok(result) => ReasonMatcher { result: Ok(result) },
+            Err(err) => {
+                let type_id = any::TypeId::of::<R>();
+                let ptr = err.reason_and_source.non_null_ptr.as_ptr();
+                let is_fn = unsafe { (*ptr).is_fn };
+                if is_fn(type_id) {
+                    let typed_ptr = ptr as *const ReasonAndSource<R>;
+                    ReasonMatcher {
+                        result: Ok(func(unsafe { &((*typed_ptr).reason_and_source.0) })),
+                    }
+                } else {
+                    ReasonMatcher { result: Err(err) }
+                }
+            }
+        }
+    }
+
+    /// Finalizes the matching chain and returns the result.
+    ///
+    /// If any of the matches in the chain succeeded, its result is returned.
+    /// Otherwise, the provided function `f` is called with the original error.
+    pub fn or_result<F>(self, f: F) -> Result<T, Err>
+    where
+        F: FnOnce(&Err) -> Result<T, Err>,
+    {
+        match self.result {
+            Ok(result) => result,
+            Err(err) => f(&err),
+        }
     }
 }
 
@@ -824,6 +863,12 @@ mod tests_of_err {
             FailToGetValue { name: String },
         }
 
+        #[allow(dead_code)]
+        #[derive(Debug)]
+        enum Enum1 {
+            BadValue,
+        }
+
         #[test]
         fn reason_is_enum() {
             let err = Err::new(Enum0::InvalidValue {
@@ -845,16 +890,40 @@ mod tests_of_err {
                 },
             }
 
-            err.match_reason::<String>(|_s| {
-                panic!();
-            })
-            .match_reason::<Enum0>(|r| match r {
-                Enum0::InvalidValue { name, value } => {
-                    assert_eq!(name, "foo");
-                    assert_eq!(value, "abc");
-                }
-                _ => panic!(),
-            });
+            let result: Result<u8, Err> = err
+                .match_reason::<Enum0, u8>(|r| match r {
+                    Enum0::InvalidValue { name, value } => {
+                        assert_eq!(name, "foo");
+                        assert_eq!(value, "abc");
+                        Ok(123u8)
+                    }
+                    _ => panic!(),
+                })
+                .or_result(|_e| Err(Err::new("fail")));
+
+            assert_eq!(result.unwrap(), 123);
+
+            let result: Result<u8, Err> = err
+                .match_reason::<String, u8>(|_s| Ok(0u8))
+                .or_match_reason::<Enum0>(|r| match r {
+                    Enum0::InvalidValue { name, value } => {
+                        assert_eq!(name, "foo");
+                        assert_eq!(value, "abc");
+                        Ok(123u8)
+                    }
+                    _ => panic!(),
+                })
+                .or_match_reason::<Enum1>(|_r| Ok(1u8))
+                .or_result(|_e| Err(Err::new("fail")));
+
+            assert_eq!(result.unwrap(), 123);
+
+            let result: Result<u8, Err> = err
+                .match_reason::<String, u8>(|_s| Ok(0u8))
+                .or_match_reason::<Enum1>(|_r| Ok(1u8))
+                .or_result(|_e| Err(Err::new("fail")));
+
+            assert_eq!(result.unwrap_err().reason::<&str>().unwrap(), &"fail");
         }
     }
 

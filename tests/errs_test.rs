@@ -87,36 +87,63 @@ mod integration_tests_of_err {
     fn should_match_reason() {
         match find_file() {
             Ok(_) => panic!(),
-            Err(err) => err.match_reason::<IoErrs>(|r| match r {
-                IoErrs::FileNotFound { path } => {
-                    assert_eq!(path, "/aaa/bbb/ccc");
-                }
-                IoErrs::NoPermission { path: _, r#mod: _ } => panic!(),
-                IoErrs::DueToSomeError { path: _ } => panic!(),
-            }),
+            Err(err) => {
+                let Ok(s) = err
+                    .match_reason::<IoErrs, String>(|r| match r {
+                        IoErrs::FileNotFound { path } => {
+                            assert_eq!(path, "/aaa/bbb/ccc");
+                            Ok(path.to_string())
+                        }
+                        IoErrs::NoPermission { path: _, r#mod: _ } => panic!(),
+                        IoErrs::DueToSomeError { path: _ } => panic!(),
+                    })
+                    .or_result(|_err| Err(errs::Err::new("bad")))
+                else {
+                    panic!();
+                };
+                assert_eq!(s, "/aaa/bbb/ccc");
+            }
         };
 
         match read_file() {
             Ok(_) => panic!(),
-            Err(err) => err.match_reason::<IoErrs>(|r| match r {
-                IoErrs::FileNotFound { path: _ } => panic!(),
-                IoErrs::NoPermission { path, r#mod } => {
-                    assert_eq!(path, "/aaa/bbb/ccc");
-                    assert_eq!(*r#mod, (4, 4, 4));
-                }
-                IoErrs::DueToSomeError { path: _ } => panic!(),
-            }),
+            Err(err) => {
+                let Ok(s) = err
+                    .match_reason::<IoErrs, String>(|r| match r {
+                        IoErrs::FileNotFound { path: _ } => panic!(),
+                        IoErrs::NoPermission { path, r#mod } => {
+                            assert_eq!(path, "/aaa/bbb/ccc");
+                            assert_eq!(*r#mod, (4, 4, 4));
+                            Ok(path.to_string())
+                        }
+                        IoErrs::DueToSomeError { path: _ } => panic!(),
+                    })
+                    .or_result(|_err| Err(errs::Err::new("bad")))
+                else {
+                    panic!();
+                };
+                assert_eq!(s, "/aaa/bbb/ccc");
+            }
         };
 
         match write_file() {
             Ok(_) => panic!(),
-            Err(err) => err.match_reason::<IoErrs>(|r| match r {
-                IoErrs::FileNotFound { path: _ } => panic!(),
-                IoErrs::NoPermission { path: _, r#mod: _ } => panic!(),
-                IoErrs::DueToSomeError { path } => {
-                    assert_eq!(path, "/aaa/bbb/ccc");
-                }
-            }),
+            Err(err) => {
+                let Ok(s) = err
+                    .match_reason::<IoErrs, String>(|r| match r {
+                        IoErrs::FileNotFound { path: _ } => panic!(),
+                        IoErrs::NoPermission { path: _, r#mod: _ } => panic!(),
+                        IoErrs::DueToSomeError { path } => {
+                            assert_eq!(path, "/aaa/bbb/ccc");
+                            Ok(path.to_string())
+                        }
+                    })
+                    .or_result(|_err| Err(errs::Err::new("bad")))
+                else {
+                    panic!();
+                };
+                assert_eq!(s, "/aaa/bbb/ccc");
+            }
         };
     }
 

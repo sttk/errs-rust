@@ -38,12 +38,12 @@ The `Err` struct can be instantiated with `new<R>(reason: R)` function or
 `with_source<R, E>(reason: R, source: E)` function.
 
 Then, the reason can be identified with `reason<R>(&self)` method and a `match` statement,
-or `match_reason<R>(&self, func fn(&R))` method.
+or `match_reason<R, T>(&self, func: impl FnOnce(&R) -> Result<T, Err>)` method.
 
 The following code is an example which uses `new<R>(reason: R)` function for instantiation,
 and `reason<R>(&self)` method and a `match` statement for identifying a reason:
 
-```
+```rust
 use errs::Err;
 
 #[derive(Debug)]
@@ -64,6 +64,31 @@ match err.reason::<Reasons>() {
         Err(err) => { /* ... */ }
     }
 }
+```
+
+The following code is an example which uses `match_reason`, `or_match_reason`, and `or_result`
+methods for identifying a reason in a chaining manner:
+
+```rust
+use errs::Err;
+
+#[derive(Debug)]
+enum Reasons {
+    IllegalState { state: String },
+    // ...
+}
+
+let err = Err::new(Reasons::IllegalState { state: "bad state".to_string() });
+
+let state = err.match_reason::<Reasons, String>(|r| match r {
+    Reasons::IllegalState { state } => Ok(state.clone()),
+}).or_match_reason::<String>(|s| {
+    Ok(s.clone())
+}).or_result(|_err| {
+    Ok("unknown".to_string())
+}).unwrap();
+
+assert_eq!(state, "bad state");
 ```
 
 ### Function-based Error Handler Registration
