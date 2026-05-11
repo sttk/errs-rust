@@ -53,12 +53,12 @@
 //! `with_source<R, E>(reason: R, source: E)` function.
 //!
 //! Then, the reason can be identified with `reason<R>(&self)` method and a `match` statement,
-//! or `match_reason<R>(&self, func fn(&R))` method.
+//! or `match_reason<R, T>(&self, func: impl FnOnce(&R) -> Result<T, Err>)` method.
 //!
 //! The following code is an example which uses `new<R>(reason: R)` function for instantiation,
 //! and `reason<R>(&self)` method and a `match` statement for identifying a reason:
 //!
-//! ```
+//! ```rust
 //! use errs::Err;
 //!
 //! #[derive(Debug)]
@@ -79,6 +79,30 @@
 //!         Err(err) => { /* ... */ }
 //!     }
 //! }
+//! ```
+//!
+//! The following code is an example which uses `match_reason` method for identifying a reason:
+//!
+//! ```rust
+//! use errs::Err;
+//!
+//! #[derive(Debug)]
+//! enum Reasons {
+//!     IllegalState { state: String },
+//!     // ...
+//! }
+//!
+//! let err = Err::new(Reasons::IllegalState { state: "bad state".to_string() });
+//!
+//! let state = err.match_reason::<Reasons, String>(|r| match r {
+//!     Reasons::IllegalState { state } => Ok(state.clone()),
+//! }).or_match_reason::<String>(|s| {
+//!     Ok(s.clone())
+//! }).or_result(|_err| {
+//!     Ok("unknown".to_string())
+//! }).unwrap();
+//!
+//! assert_eq!(state, "bad state");
 //! ```
 //!
 //! ### Macro-based Registration of Err Handlers
@@ -342,3 +366,10 @@ struct SendSyncNonNull<T: Send + Sync> {
 /// }
 /// ```
 pub type Result<T> = result::Result<T, Err>;
+
+/// A matcher for the reason of an error.
+///
+/// This struct is created by [`Err::match_reason`].
+pub struct ReasonMatcher<T> {
+    result: std::result::Result<std::result::Result<T, Err>, Err>,
+}
