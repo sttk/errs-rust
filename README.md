@@ -12,8 +12,8 @@ let err = errs::Err::new("invalid state");
 
 ```rust
 enum FileErrors {
-    FailToOpenFile,
-    FailToReadLine,
+    FailToOpenFile { path: String },
+    FailToReadLine { line: String },
 }
 
 let err = errs::Err::new(FileErrors::FailToOpenFile);
@@ -58,7 +58,7 @@ Error reasons can be identified in a type-safe manner.
 
 ```rust
 match err.reason::<FileErrors>() {
-    FileErrors::FailToOpenFile { file_path } => ...,
+    FileErrors::FailToOpenFile { path } => ...,
     _ => ...,
 }
 ```
