@@ -1,119 +1,42 @@
 # [errs][repo-url] [![crates.io][cratesio-img]][cratesio-url] [![doc.rs][docrs-img]][docrs-url] [![CI Status][ci-img]][ci-url] [![MIT License][mit-img]][mit-url]
 
-## Introduction
+A library for handling errors with reasons for Rust
 
-This crate is an error handling library for Rust that focuses on handling the "reason" of an error.
+## Overview
 
-Since arbitrary types can be used as error reasons, the same API can be used for everything from lightweight string-based usage to large-scale type-safe designs using enums and structs.
+`errs` is an error handling library for Rust designed to focus on the "Reason" behind an error.
 
-```rust
-let err = errs::Err::new("invalid state");
-```
+### Expressing "Why It Failed" via the Type System
 
-```rust
-enum FileErrors {
-    FailToOpenFile { path: String },
-    FailToReadLine { line: String },
-}
+Rather than treating errors as simple message strings or type-erased objects, it embraces a design that expresses "why it failed" through types, allowing for safe and clear propagation and determination.
 
-let err = errs::Err::new(FileErrors::FailToOpenFile);
-```
+For error reasons, you can use anything from lightweight types like `String` to type-safe definitions using `enum` or `struct`, all handled flexibly with the same API.
+By using an `enum` in particular, you can not only express failure factors within the type system but also hold contextual information in its fields, propagating the situation and relevant data at the time of the error as-is.
+Furthermore, since reasons can be determined in a type-safe manner using `reason::<T>()` or `match_reason`, you can avoid fragile error handling that relies on string comparisons.
 
-## Core Concepts
+### Decentralized Error Definition and  Traceability
 
-### Arbitrary types can be used as error reasons
+`errs` encourages defining error reasons close to where they occur.
+This eliminates the need to share a massive, monolithic error type across the entire application, enabling a highly maintainable design while keeping dependencies between modules clean.
+Type information is utilized to identify the reason, and the type identifiers required for this determination are resolved statically at compile time.
+This provides type-safe error handling with minimal runtime overhead.
 
-Error reasons can be represented by arbitrary types such as strings, enums, and structs.
+The core `Err` type of the library implements `std::error::Error`, allowing it to integrate naturally with standard Rust error handling, including the `?` operator.
+It can also retain lower-layer errors as causes (source errors), enabling you to manage the "Reason" of the upper layer and the "Cause" of the lower layer separately.
+Additionally, it automatically records the file name and line number when an error is generated, making log output and failure analysis effortless.
 
-- Easy to start with simple string reasons for small utilities
-- Type-safe handling with enums or structs for large applications
-- No need to create a global error enum
+### Powerful Error-Instantiation Notification & Monitoring Ecosystem
 
-This allows the library to be used consistently from small CLI utilities to applications with layered architectures.
+Furthermore, `errs` features a mechanism to notify error generation events.
+By enabling the `notify` or `notify-tokio` feature, an automatic notification can be sent to registered handlers the exact moment an `Err` is created.
+It supports synchronous handlers, generic asynchronous handlers, and asynchronous handlers tailored for Tokio.
+It accommodates both dynamic registration within functions and static global registration via macros.
+This makes it easy to implement logging, monitoring, metrics collection, and integration with telemetry systems.
 
-### Error reasons can be defined locally
+While `anyhow`-like libraries place importance on "propagating errors flexibly," and `thiserror`-like libraries focus on "making error type definitions easy," `errs` emphasizes "expressing failure reasons through types and observing their occurrence.
+" This library is ideal when you want to clearly manage the semantics of errors occurring within an application while integrating seamlessly with monitoring and operations infrastructure.
 
-Enums or structs representing error reasons can be defined near the location where the error may occur.
-
-```rust
-pub mod auth_service {
-    pub enum AuthServiceErrors {
-        InvalidToken,
-        ExpiredSession,
-    }
-}
-```
-
-This provides several advantages:
-
-- Module paths naturally express error categories and origins
-- Easier to maintain module locality
-- Helps avoid dependency concentration
-
-In addition, since reason types can be defined easily at the point where errors occur, developers are more likely to implement fine-grained error handling.
-
-### Type-safe reason identification
-
-Error reasons can be identified in a type-safe manner.
-
-```rust
-match err.reason::<FileErrors>() {
-    FileErrors::FailToOpenFile { path } => ...,
-    _ => ...,
-}
-```
-
-```rust
-let val: bool = err.match_reason::<AuthServiceErrors, bool>(|r| match r { ... })
-    .or_match_reason::<FileErrors>(|r| match r { ... }) 
-    .or_result(|e| ... )?;
-```
-
-This enables reason-based error handling without relying on string comparisons or error codes.
-
-### Source error chaining
-
-The original source error can be retained.
-
-```rust
-let err = Err::with_source(reason, source);
-```
-
-This makes it possible to separate:
-
-- High-level failure reasons
-- Low-level underlying causes
-
-### Stores error creation location
-
-File and line information at the point of error creation are retained.
-
-This integrates well with logging, monitoring, and telemetry systems.
-
-### Error notification mechanism
-
-The `notify` and `notify-tokio` features provide notification mechanisms for error generation.
-
-Supported features include:
-
-- Synchronous and asynchronous notifications
-- Tokio runtime integration
-- Inventory-based static registration of error handlers
-
-This makes the library suitable for observability integrations such as logging, monitoring, telemetry, remote reporting, and Rust standard backtraces.
-
-The global or local handlers to be notified whenever an Err is instantiated are registered with functions or macros.
-
-```rust
-add_sync_err_handler!(|err, tm| println!("{}: {}", tm, err));
-
-errs::add_sync_err_handler(|err, tm| println!("{}: {}", tm, err));
-errs::fix_err_handlers();
-```
-
-**NOTE**: If `fix_err_handlers` is not executed explicitly, the handler registration will be fixed internally when the first Err instance is created.
-
-## Installation
+## Install
 
 In `Cargo.toml`, write this crate as a dependency:
 
@@ -137,18 +60,13 @@ If you are using Tokio, you should specify `notify-tokio`:
 errs = { version = "0.9.0", features = ["notify-tokio"] }
 ```
 
-## Detailed Usage
+## Usage
 
-### Err instantiation and identification of a reason
+### Locally Defined Reasons and Instantiate an Err with Them
 
-The `Err` struct can be instantiated with `new<R>(reason: R)` function or
-`with_source<R, E>(reason: R, source: E)` function.
-
-Then, the reason can be identified with `reason<R>(&self)` method and a `match` statement,
-or `match_reason<R, T>(&self, func: impl FnOnce(&R) -> Result<T, Err>)` method.
-
-The following code is an example which uses `new<R>(reason: R)` function for instantiation,
-and `reason<R>(&self)` method and a `match` statement for identifying a reason:
+An `Err` struct can be instantiated with any arbitrary error reason.
+Typically, a variant of an enum defined to indicate the cause or context of the error is used as the reason.
+This variant does not need to belong to a single, centrally managed enum; rather, it is preferable to define it close to where the error using it as a reason actually occurs.
 
 ```rust
 use errs::Err;
@@ -160,33 +78,40 @@ enum Reasons {
 }
 
 let err = Err::new(Reasons::IllegalState { state: "bad state".to_string() });
+```
 
+An `Err` can also be instantiated using `Err::with_source`, which accepts the underlying cause error along with the reason.
+
+```rust
+use std::io::{Error, ErrorKind};
+use errs::Err;
+
+let io_error = Error::new(ErrorKind::Interrupted, "oh no!");
+
+let err = Err::with_source(Reasons::IllegalState { state: "bad state".to_string() }, io_error);
+```
+
+### Type-Safe Reason Identification
+
+By using the `reason::<R>(&self)` method, you can extract the error reason as the specified type `R`.
+Since the return value is `Result<&R, &Err>`, you can use a `match` statement to safely branch and identify the reason in a type-safe manner.
+
+```rust
 match err.reason::<Reasons>() {
     Ok(r) => match r {
         Reasons::IllegalState { state } => println!("state = {state}"),
         _ => { /* ... */ }
     }
-    Err(e) => match err.reason::<String>() {
+    Err(err) => match err.reason::<String>() {
         Ok(s) => println!("string reason = {s}"),
-        Err(e) => { /* ... */ }
+        Err(err) => { /* ... */ }
     }
 }
 ```
 
-The following code is an example which uses `match_reason`, `or_match_reason`, and `or_result`
-methods for identifying a reason in a chaining manner:
+Methods like `match_reason` allow you to write error reason identification and fallback processing elegantly using method chaining, without having to nest multiple `match` statements.
 
 ```rust
-use errs::Err;
-
-#[derive(Debug)]
-enum Reasons {
-    IllegalState { state: u8 },
-    // ...
-}
-
-let err = Err::new(Reasons::IllegalState { state: 0u8 });
-
 let val: u8 = err.match_reason::<Reasons, u8>(|r| match r {
     Reasons::IllegalState { _state } => Ok(1u8),
     _ => Ok(2u8),
@@ -281,8 +206,7 @@ add_tokio_async_err_handler!(async |err: Arc<Err>, tm: DateTime<Utc>| {
 // errs::fix_err_handlers();
 ```
 
-
-## Supporting Rust versions
+## Supported Rust versions
 
 This crate supports Rust 1.80.1 or later.
 
@@ -309,7 +233,7 @@ Compatibility Check #6: Rust 1.80.1
   [OK]     Is compatible
 
 Result:
-   Considered (min … max):   Rust 1.56.1 … Rust 1.95.0
+   Considered (min … max):   Rust 1.56.1 … Rust 1.96.0
    Search method:            bisect
    MSRV:                     1.80.1
    Target:                   x86_64-apple-darwin
