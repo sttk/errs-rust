@@ -124,6 +124,8 @@ let val: u8 = err.match_reason::<Reasons, u8>(|r| match r {
 
 ### Function-based Error Handler Registration
 
+> To enable this feature, you must specify the feature `notify` or `notify-tokio` in `Cargo.toml`.
+
 This crate optionally provides a feature to notify pre-registered error handlers when an `Err`
 is instantiated.
 Multiple error handlers can be registered, and you can choose to receive notifications either
@@ -162,6 +164,8 @@ errs::fix_err_handlers();
 ```
 
 ### Macro-based Error Handler Registration
+
+> To enable this feature, you must specify the feature `notify` or `notify-tokio` in `Cargo.toml`.
 
 Alternatively, you can register handlers from a static context (outside a function body)
 using macros. These are useful for setting up global handlers that are compiled into your
