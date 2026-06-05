@@ -33,8 +33,8 @@ It supports synchronous handlers, generic asynchronous handlers, and asynchronou
 It accommodates both dynamic registration within functions and static global registration via macros.
 This makes it easy to implement logging, monitoring, metrics collection, and integration with telemetry systems.
 
-While `anyhow`-like libraries place importance on "propagating errors flexibly," and `thiserror`-like libraries focus on "making error type definitions easy," `errs` emphasizes "expressing failure reasons through types and observing their occurrence.
-" This library is ideal when you want to clearly manage the semantics of errors occurring within an application while integrating seamlessly with monitoring and operations infrastructure.
+While `anyhow`-like libraries place importance on "propagating errors flexibly," and `thiserror`-like libraries focus on "making error type definitions easy", `errs` emphasizes "expressing failure reasons through types and observing their occurrence".
+This library is ideal when you want to clearly manage the semantics of errors occurring within an application while integrating seamlessly with monitoring and operations infrastructure.
 
 ## Install
 
