@@ -26,7 +26,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! errs = "0.9.0"
+//! errs = "1.0.0"
 //! ```
 //!
 //! If you want to use error notification, specify `notify` or `notify-tokio` in the
@@ -35,14 +35,14 @@
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.9.0", features = ["notify"] }
+//! errs = { version = "1.0.0", features = ["notify"] }
 //! ```
 //!
 //! If you are using Tokio, you should specify `notify-tokio`:
 //!
 //! ```toml
 //! [dependencies]
-//! errs = { version = "0.9.0", features = ["notify-tokio"] }
+//! errs = { version = "1.0.0", features = ["notify-tokio"] }
 //! ```
 //!
 //! ## Usage
