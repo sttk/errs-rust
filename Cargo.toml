@@ -19,7 +19,7 @@ setup_read_cleanup = { version = "0.8", optional = true }
 inventory = { version = "0.3", optional = true }
 
 [dev-dependencies]
-trybuild = "1"
+trybuild = "=1.0.119"
 
 [features]
 notify = ["setup_read_cleanup/graceful", "dep:chrono", "dep:inventory"]
